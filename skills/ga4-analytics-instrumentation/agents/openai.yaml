@@ -1,0 +1,4 @@
+interface:
+  display_name: "GA4 Analytics Instrumentation"
+  short_description: "Govern GA4 analytics events across Android and iOS."
+  default_prompt: "Use this skill to add, change, review, or validate GA4/Firebase Analytics instrumentation, schemas, dashboards, and cross-platform tracking contracts."
