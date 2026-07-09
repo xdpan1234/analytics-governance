@@ -1,0 +1,2730 @@
+schema_version: 2
+owner: device
+platforms:
+  - android
+  - ios
+common_properties:
+  injected_by_adapter:
+    - platform
+    - environment
+    - build_region
+    - build_type
+    - app_version_name
+    - app_version_code
+  definitions:
+    platform: Lowercase client platform, such as android or ios.
+    environment: Analytics environment, test or prod.
+    build_region: Analytics build region. Current Android rule is prod -> us, test -> sg.
+    build_type: Client build type such as debug or release.
+    app_version_name: Public app version name injected by the client adapter.
+    app_version_code: Numeric app version code injected by the client adapter.
+implementation_contract:
+  android_contract_layer: "domain:api:analytics"
+  android_tracker: "AnalyticsTracker"
+  android_event_type: "AnalyticsEvent"
+  android_event_spec_type: "AnalyticsEventSpec"
+  android_provider_adapter: "Ga4AnalyticsAdapter"
+  android_direct_sdk_boundary: "Only the app-level provider adapter may call FirebaseAnalytics. Business, feature, domain, and data code must use typed reporters or AnalyticsTracker."
+  ios_contract_layer: "iOS analytics facade matching this schema"
+  ios_provider_adapter: "GA4/Firebase adapter behind the iOS facade"
+  ios_direct_sdk_boundary: "Only the iOS provider adapter may call Firebase Analytics.logEvent. Business code must use the facade."
+  required_tests:
+    - ga4_event_name_rules
+    - ga4_param_name_rules
+    - ga4_param_count_limit
+    - reserved_prefix_guardrails
+    - privacy_field_guardrails
+    - reporter_output_contract
+events:
+
+  # ── Device Entry & State ──────────────────────────────────────────────────
+
+  - event_name: device_hub_viewed
+    goal: Measure device entry exposure volume from Home, Settings, or detail surfaces.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Home, Settings, or detail page renders the formal device entry and status card.
+    trigger_ios: Home, Settings, or detail page renders the formal device entry and status card.
+    required_properties:
+      - entry_point
+      - surface
+    optional_properties:
+      - trigger_source
+    allowed_values:
+      entry_point:
+        - home
+        - settings
+        - notification
+        - unknown
+      surface:
+        - home
+        - settings
+        - device
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+    privacy_notes: Do not include device name, device address, BLE address, device model string, or MAC address.
+    ga4_custom_definitions:
+      - entry_point
+      - surface
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_entry_exposure
+      - device_hub_funnel
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Navigate to Home and confirm device_hub_viewed appears once with platform=android.
+      - Navigate to Settings device section and confirm device_hub_viewed appears with the correct surface and entry_point.
+      - Confirm no device name, address, BLE address, device model string, or MAC address is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Navigate to Home and confirm device_hub_viewed appears once with platform=ios.
+      - Navigate to Settings device section and confirm device_hub_viewed appears with the correct surface and entry_point.
+      - Confirm no device name, address, BLE address, device model string, or MAC address is present.
+
+  - event_name: device_primary_action_tapped
+    goal: Measure the distribution of primary device card actions taken by the user.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User taps the primary action on the device card to connect, reconnect, view device details, or enter the firmware upgrade entry point.
+    trigger_ios: User taps the primary action on the device card to connect, reconnect, view device details, or enter the firmware upgrade entry point.
+    required_properties:
+      - surface
+      - trigger_source
+    optional_properties:
+      - entry_point
+      - action_type
+    allowed_values:
+      surface:
+        - home
+        - settings
+        - device
+        - unknown
+      trigger_source:
+        - user
+        - unknown
+      entry_point:
+        - home
+        - settings
+        - unknown
+      action_type:
+        - connect
+        - reconnect
+        - view_details
+        - upgrade
+        - unknown
+    privacy_notes: action_type must be a stable low-cardinality enum. Do not include button label text, device name, or device address.
+    ga4_custom_definitions:
+      - surface
+      - action_type
+      - entry_point
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_primary_action_breakdown
+      - device_hub_funnel
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Tap each primary device card action (connect, reconnect, view_details, upgrade) and confirm device_primary_action_tapped appears with the correct action_type for each.
+      - Confirm no button label text, device name, or device address is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Tap each primary device card action and confirm device_primary_action_tapped appears with the correct action_type.
+      - Confirm no button label text, device name, or device address is present.
+
+  - event_name: device_entry_blocked
+    goal: Identify device entry blocked scenarios such as no bound device, forced upgrade gate, or formal permission barrier.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Device entry is blocked by no bound device, forced firmware upgrade requirement, or a formal gate that prevents the user from continuing.
+    trigger_ios: Device entry is blocked by no bound device, forced firmware upgrade requirement, or a formal gate that prevents the user from continuing.
+    required_properties:
+      - failure_reason
+      - surface
+    optional_properties:
+      - entry_point
+    allowed_values:
+      failure_reason:
+        - unsupported_state
+        - permission_denied
+        - validation_failed
+        - network_error
+        - timeout
+        - sdk_error
+        - unknown
+      surface:
+        - home
+        - settings
+        - device
+        - unknown
+      entry_point:
+        - home
+        - settings
+        - notification
+        - unknown
+    privacy_notes: Do not include raw device state objects, BLE error codes, or device address.
+    ga4_custom_definitions:
+      - failure_reason
+      - surface
+      - entry_point
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_entry_block_breakdown
+      - device_hub_funnel
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Simulate no-bound-device state and confirm device_entry_blocked appears with an approved failure_reason.
+      - Simulate forced firmware upgrade gate and confirm device_entry_blocked appears with failure_reason=unsupported_state.
+      - Confirm no raw device state objects, BLE error codes, or device address is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Simulate no-bound-device and forced-upgrade gate states and confirm device_entry_blocked appears with approved failure_reason values.
+      - Confirm no raw device state objects, BLE error codes, or device address is present.
+
+  # ── Connection & Binding ─────────────────────────────────────────────────
+
+  - event_name: device_binding_started
+    goal: Measure entry volume into first-time and rebind device connection flows.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User enters the formal device binding flow from an approved entry point (ConnectGlassViewModel initiated).
+    trigger_ios: User enters the formal device binding flow from an approved entry point.
+    required_properties:
+      - entry_point
+      - trigger_source
+      - surface
+    optional_properties:
+      - binding_mode
+    allowed_values:
+      entry_point:
+        - home
+        - settings
+        - onboarding
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+      surface:
+        - home
+        - settings
+        - onboarding
+        - unknown
+      binding_mode:
+        - first_time
+        - rebind
+        - unknown
+    privacy_notes: Do not include pairing code, BLE raw scan data, device address, or device serial number.
+    ga4_custom_definitions:
+      - entry_point
+      - trigger_source
+      - surface
+      - binding_mode
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_binding_funnel
+      - device_binding_entry_breakdown
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Start a first-time binding flow and confirm device_binding_started appears with binding_mode=first_time.
+      - Start a rebind flow and confirm device_binding_started appears with binding_mode=rebind.
+      - Confirm no pairing code, BLE scan data, device address, or serial number is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Start first-time and rebind binding flows and confirm device_binding_started appears with the correct binding_mode.
+      - Confirm no pairing code, BLE scan data, device address, or serial number is present.
+
+  - event_name: device_binding_completed
+    goal: Measure device binding success rate.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Pairing succeeds and a formal binding result is formed (BleConnectState.DeviceBonded reached and compatibility check passed). After this event, has_bound_device user property should be set to true.
+    trigger_ios: Pairing succeeds and a formal binding result is formed. After this event, has_bound_device user property should be set to true.
+    required_properties:
+      - surface
+      - trigger_source
+    optional_properties:
+      - entry_point
+    allowed_values:
+      surface:
+        - home
+        - settings
+        - onboarding
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+      entry_point:
+        - home
+        - settings
+        - onboarding
+        - unknown
+    privacy_notes: Do not include device unique identifier, BLE address, device serial number, or pairing code. After this event, set has_bound_device=true as a GA4 user property.
+    ga4_custom_definitions:
+      - surface
+      - trigger_source
+      - entry_point
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_binding_funnel
+      - device_binding_success_rate
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Complete a real or controlled binding and confirm device_binding_completed appears once with platform=android.
+      - Confirm has_bound_device user property is set to true after the event.
+      - Confirm no device unique identifier, BLE address, serial number, or pairing code is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Complete a binding and confirm device_binding_completed appears with platform=ios.
+      - Confirm has_bound_device user property is set to true after the event.
+      - Confirm no device unique identifier, BLE address, serial number, or pairing code is present.
+
+  - event_name: device_binding_failed
+    goal: Identify device binding failure reasons.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: The binding flow ends in a failure or timeout state (BleConnectState.Error or compatibility check failure).
+    trigger_ios: The binding flow ends in a failure or timeout state.
+    required_properties:
+      - failure_reason
+      - surface
+    optional_properties:
+      - entry_point
+      - binding_mode
+    allowed_values:
+      failure_reason:
+        - network_error
+        - permission_denied
+        - timeout
+        - unsupported_state
+        - sdk_error
+        - unknown
+      surface:
+        - home
+        - settings
+        - onboarding
+        - unknown
+      entry_point:
+        - home
+        - settings
+        - onboarding
+        - unknown
+      binding_mode:
+        - first_time
+        - rebind
+        - unknown
+    privacy_notes: Map errors to approved failure_reason enum values. Do not include BLE raw error codes, device address, pairing code, or stack trace.
+    ga4_custom_definitions:
+      - failure_reason
+      - surface
+      - binding_mode
+      - entry_point
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_binding_funnel
+      - device_binding_failure_breakdown
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Simulate timeout, permission denial, and pairing failure scenarios and confirm device_binding_failed appears with approved failure_reason values.
+      - Confirm no BLE raw error codes, device address, pairing code, or stack trace is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Simulate binding failure scenarios and confirm device_binding_failed appears with approved failure_reason values.
+      - Confirm no BLE raw error codes, device address, pairing code, or stack trace is present.
+
+  # ── Device Details & Settings ─────────────────────────────────────────────
+
+  - event_name: device_settings_viewed
+    goal: Measure entry volume into the bound device detail or settings page.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User enters the bound device detail or settings page (MyDeviceScreen).
+    trigger_ios: User enters the bound device detail or settings page.
+    required_properties:
+      - entry_point
+      - surface
+    optional_properties:
+      - trigger_source
+    allowed_values:
+      entry_point:
+        - home
+        - settings
+        - notification
+        - unknown
+      surface:
+        - device
+        - settings
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+    privacy_notes: Do not include device name text, device address, or device model string.
+    ga4_custom_definitions:
+      - entry_point
+      - surface
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_settings_entry
+      - device_management_funnel
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Open the device detail page from Home and from Settings and confirm device_settings_viewed appears once per navigation with platform=android.
+      - Confirm no device name text, device address, or device model string is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Open the device detail page from Home and from Settings and confirm device_settings_viewed appears once per navigation with platform=ios.
+      - Confirm no device name text, device address, or device model string is present.
+
+  - event_name: device_setting_updated
+    goal: Measure formal device setting submission volume.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User completes a formal device setting update, calibration, unbind, or reset submission (DeviceScreenEvent or GeneralOperate action confirmed).
+    trigger_ios: User completes a formal device setting update, calibration, unbind, or reset submission.
+    required_properties:
+      - surface
+      - trigger_source
+    optional_properties:
+      - entry_point
+      - setting_type
+    allowed_values:
+      surface:
+        - device
+        - settings
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+      entry_point:
+        - device
+        - settings
+        - unknown
+      setting_type:
+        - rename
+        - unbind
+        - reset
+        - restart
+        - calibrate
+        - kws_toggle
+        - video_length
+        - unknown
+    privacy_notes: setting_type must be a stable enum. Do not include user-entered device name text, user input content, or raw setting values.
+    ga4_custom_definitions:
+      - surface
+      - trigger_source
+      - setting_type
+      - entry_point
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_setting_type_breakdown
+      - device_management_funnel
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Trigger each setting type (rename, unbind, reset, restart, calibrate, kws_toggle, video_length) and confirm device_setting_updated appears with the correct setting_type.
+      - Confirm no user-entered text, raw setting values, or device address is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Trigger each setting type and confirm device_setting_updated appears with the correct setting_type.
+      - Confirm no user-entered text, raw setting values, or device address is present.
+
+  - event_name: device_setting_update_failed
+    goal: Identify device setting failure scale and failure reasons.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: A formal setting update is blocked or fails before completing (device disconnected, network failure, or SDK error during setting submission).
+    trigger_ios: A formal setting update is blocked or fails before completing.
+    required_properties:
+      - failure_reason
+      - surface
+    optional_properties:
+      - setting_type
+      - entry_point
+    allowed_values:
+      failure_reason:
+        - network_error
+        - permission_denied
+        - timeout
+        - unsupported_state
+        - sdk_error
+        - unknown
+      surface:
+        - device
+        - settings
+        - unknown
+      setting_type:
+        - rename
+        - unbind
+        - reset
+        - restart
+        - calibrate
+        - kws_toggle
+        - video_length
+        - unknown
+      entry_point:
+        - device
+        - settings
+        - unknown
+    privacy_notes: Do not include failure detail text, raw error message, device address, or user-entered content.
+    ga4_custom_definitions:
+      - failure_reason
+      - surface
+      - setting_type
+      - entry_point
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_setting_failure_breakdown
+      - device_management_funnel
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Simulate device disconnect and network failure during a setting update and confirm device_setting_update_failed appears with an approved failure_reason.
+      - Confirm no failure detail text, raw error message, or device address is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Simulate setting update failures and confirm device_setting_update_failed appears with approved failure_reason values.
+      - Confirm no failure detail text, raw error message, or device address is present.
+
+  # ── Device Info Sync & Naming ─────────────────────────────────────────────
+
+  - event_name: device_sync_evaluated
+    goal: Measure device info sync trigger volume.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: The formal sync chain begins evaluating device name, firmware version, connection state reporting, or unbind cleanup (MyDeviceViewModel.refreshVersion() or BLE state flow update).
+    trigger_ios: The formal sync chain begins evaluating device name, firmware version, connection state reporting, or unbind cleanup.
+    required_properties:
+      - surface
+      - trigger_source
+    optional_properties:
+      - sync_type
+    allowed_values:
+      surface:
+        - device
+        - settings
+        - home
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+      sync_type:
+        - name
+        - version
+        - connection_state
+        - unbind_cleanup
+        - unknown
+    privacy_notes: Do not include device name text, raw location data, BLE address, or firmware version string.
+    ga4_custom_definitions:
+      - surface
+      - trigger_source
+      - sync_type
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_sync_volume
+      - device_sync_funnel
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Trigger a manual device name update or version refresh and confirm device_sync_evaluated appears with the correct sync_type.
+      - Confirm no device name text, location data, BLE address, or firmware version string is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Trigger a sync evaluation and confirm device_sync_evaluated appears with the correct sync_type and platform=ios.
+      - Confirm no device name text, location data, BLE address, or firmware version string is present.
+
+  - event_name: device_sync_completed
+    goal: Measure device info sync completion rate.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: The formal sync chain produces a visible completion result (name, version, or connection state sync succeeds).
+    trigger_ios: The formal sync chain produces a visible completion result.
+    required_properties:
+      - surface
+      - trigger_source
+    optional_properties:
+      - sync_type
+    allowed_values:
+      surface:
+        - device
+        - settings
+        - home
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+      sync_type:
+        - name
+        - version
+        - connection_state
+        - unbind_cleanup
+        - unknown
+    privacy_notes: sync_type must be a stable enum. Do not include device name text, firmware version string, or BLE address.
+    ga4_custom_definitions:
+      - surface
+      - trigger_source
+      - sync_type
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_sync_funnel
+      - device_sync_completion_rate
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Complete a device name sync and a version sync and confirm device_sync_completed appears with the correct sync_type for each.
+      - Confirm no device name text, firmware version string, or BLE address is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Complete sync flows and confirm device_sync_completed appears with the correct sync_type and platform=ios.
+      - Confirm no device name text, firmware version string, or BLE address is present.
+
+  - event_name: device_sync_failed
+    goal: Identify device info sync failure reasons.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: The formal sync chain fails or compensation does not complete (server write failure, timeout, or network error).
+    trigger_ios: The formal sync chain fails or compensation does not complete.
+    required_properties:
+      - failure_reason
+      - surface
+    optional_properties:
+      - sync_type
+    allowed_values:
+      failure_reason:
+        - network_error
+        - timeout
+        - permission_denied
+        - unsupported_state
+        - sdk_error
+        - unknown
+      surface:
+        - device
+        - settings
+        - home
+        - unknown
+      sync_type:
+        - name
+        - version
+        - connection_state
+        - unbind_cleanup
+        - unknown
+    privacy_notes: Do not include raw location data, device name text, raw error message, or firmware version string.
+    ga4_custom_definitions:
+      - failure_reason
+      - surface
+      - sync_type
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_sync_funnel
+      - device_sync_failure_breakdown
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Simulate a server write failure during sync and confirm device_sync_failed appears with an approved failure_reason.
+      - Confirm no location data, device name text, raw error message, or firmware version string is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Simulate sync failures and confirm device_sync_failed appears with approved failure_reason values and platform=ios.
+      - Confirm no location data, device name text, or raw error message is present.
+
+  # ── Auto-Reconnect & Disconnection Recovery ───────────────────────────────
+
+  - event_name: device_reconnect_started
+    goal: Measure reconnect initiation volume.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: The formal auto-reconnect (LTBleManager recovery, trigger_source=system) or manual reconnect (HomeViewModel.reconnect(), trigger_source=user) chain begins after a disconnection.
+    trigger_ios: The formal auto-reconnect or manual reconnect chain begins after a disconnection.
+    required_properties:
+      - entry_point
+      - trigger_source
+      - surface
+    optional_properties:
+      - reconnect_mode
+    allowed_values:
+      entry_point:
+        - home
+        - settings
+        - background
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+      surface:
+        - home
+        - settings
+        - device
+        - background
+        - unknown
+      reconnect_mode:
+        - auto
+        - manual
+        - unknown
+    privacy_notes: Do not include raw BLE event stream, device address, or low-level connection error codes.
+    ga4_custom_definitions:
+      - entry_point
+      - trigger_source
+      - surface
+      - reconnect_mode
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_reconnect_funnel
+      - device_reconnect_volume
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Simulate a disconnect and trigger auto-reconnect; confirm device_reconnect_started appears with reconnect_mode=auto and trigger_source=system.
+      - Manually trigger reconnect from Home; confirm device_reconnect_started appears with reconnect_mode=manual and trigger_source=user.
+      - Confirm no BLE event stream, device address, or low-level error codes are present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Simulate auto and manual reconnect and confirm device_reconnect_started appears with the correct reconnect_mode and platform=ios.
+      - Confirm no BLE event stream, device address, or low-level error codes are present.
+
+  - event_name: device_reconnect_completed
+    goal: Measure reconnect success rate after disconnection.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Reconnection completes and the device returns to the usable connected state (AirChannelStatus.CONNECTED restored).
+    trigger_ios: Reconnection completes and the device returns to the usable connected state.
+    required_properties:
+      - surface
+      - trigger_source
+    optional_properties:
+      - reconnect_mode
+    allowed_values:
+      surface:
+        - home
+        - settings
+        - device
+        - background
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+      reconnect_mode:
+        - auto
+        - manual
+        - unknown
+    privacy_notes: reconnect_mode must be a stable enum. Do not include device address or BLE raw event data.
+    ga4_custom_definitions:
+      - surface
+      - trigger_source
+      - reconnect_mode
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_reconnect_funnel
+      - device_reconnect_success_rate
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Simulate a disconnect and allow auto-reconnect to succeed; confirm device_reconnect_completed with reconnect_mode=auto.
+      - Manually trigger reconnect to success; confirm device_reconnect_completed with reconnect_mode=manual.
+      - Confirm no device address or BLE raw event data is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Confirm device_reconnect_completed appears with the correct reconnect_mode and platform=ios after a successful reconnect.
+      - Confirm no device address or BLE raw event data is present.
+
+  - event_name: device_reconnect_failed
+    goal: Identify reconnect failure reasons.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Auto-reconnect or manual reconnect ends in a failed state (timeout, user cancellation, or BLE error mapped to approved failure_reason).
+    trigger_ios: Auto-reconnect or manual reconnect ends in a failed state.
+    required_properties:
+      - failure_reason
+      - surface
+    optional_properties:
+      - reconnect_mode
+      - entry_point
+    allowed_values:
+      failure_reason:
+        - network_error
+        - permission_denied
+        - timeout
+        - unsupported_state
+        - sdk_error
+        - unknown
+      surface:
+        - home
+        - settings
+        - device
+        - background
+        - unknown
+      reconnect_mode:
+        - auto
+        - manual
+        - unknown
+      entry_point:
+        - home
+        - settings
+        - background
+        - unknown
+    privacy_notes: Map BLE errors to approved failure_reason values. Do not include BLE error stack, device address, or raw connection state dump.
+    ga4_custom_definitions:
+      - failure_reason
+      - surface
+      - reconnect_mode
+      - entry_point
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_reconnect_funnel
+      - device_reconnect_failure_breakdown
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Simulate reconnect timeout and user cancellation and confirm device_reconnect_failed appears with approved failure_reason values.
+      - Confirm no BLE error stack, device address, or raw connection state dump is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Simulate reconnect failures and confirm device_reconnect_failed appears with approved failure_reason values and platform=ios.
+      - Confirm no BLE error stack, device address, or raw connection state is present.
+
+  # ── Version Gate & Upgrade Linkage ───────────────────────────────────────
+
+  - event_name: device_version_gate_evaluated
+    goal: Measure version gate evaluation volume triggered during formal connection or usage flows.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: A formal connection or usage flow enters firmware version evaluation (CompatibilityCheckStateManager runs after BleConnectState.ServicesPrepared).
+    trigger_ios: A formal connection or usage flow enters firmware version evaluation.
+    required_properties:
+      - surface
+      - trigger_source
+    optional_properties:
+      - entry_point
+    allowed_values:
+      surface:
+        - home
+        - settings
+        - device
+        - onboarding
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+      entry_point:
+        - home
+        - settings
+        - onboarding
+        - unknown
+    privacy_notes: Do not include firmware version string, full version details, device address, or raw compatibility check output.
+    ga4_custom_definitions:
+      - surface
+      - trigger_source
+      - entry_point
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_version_volume
+      - device_upgrade_funnel
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Enter a formal path that triggers version checking (binding flow after ServicesPrepared) and confirm device_version_gate_evaluated appears once.
+      - Confirm no firmware version string, full version details, or device address is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Trigger version gate evaluation and confirm device_version_gate_evaluated appears with platform=ios.
+      - Confirm no firmware version string, full version details, or device address is present.
+
+  - event_name: device_version_gate_passed
+    goal: Measure the volume of flows that pass the firmware/app version gate and can continue.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: A formal connection or usage flow completes firmware/app version evaluation without being blocked and continues to the requested device behavior.
+    trigger_ios: A formal connection or usage flow completes firmware/app version evaluation without being blocked and continues to the requested device behavior.
+    required_properties:
+      - surface
+      - trigger_source
+    optional_properties:
+      - entry_point
+    allowed_values:
+      surface:
+        - home
+        - settings
+        - device
+        - onboarding
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+      entry_point:
+        - home
+        - settings
+        - onboarding
+        - unknown
+    privacy_notes: Do not include firmware version string, full version details, device address, or raw compatibility check output.
+    ga4_custom_definitions:
+      - surface
+      - trigger_source
+      - entry_point
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_version_volume
+      - device_upgrade_funnel
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Enter a formal path that triggers version checking and passes compatibility; confirm device_version_gate_passed appears after device_version_gate_evaluated.
+      - Confirm no firmware version string, full version details, raw compatibility check output, or device address is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Trigger a version gate pass and confirm device_version_gate_passed appears with platform=ios.
+      - Confirm no firmware version string, full version details, raw compatibility check output, or device address is present.
+
+  - event_name: device_version_gate_blocked
+    goal: Measure the volume of flows blocked by a version gate.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: A formal flow is intercepted because the firmware or app version does not meet requirements (UpgradeType.UpgradeFw with isForce=true, or UpgradeType.UpgradeApp).
+    trigger_ios: A formal flow is intercepted because the firmware or app version does not meet requirements.
+    required_properties:
+      - failure_reason
+      - surface
+    optional_properties:
+      - entry_point
+    allowed_values:
+      failure_reason:
+        - unsupported_state
+        - validation_failed
+        - sdk_error
+        - unknown
+      surface:
+        - home
+        - settings
+        - device
+        - onboarding
+        - unknown
+      entry_point:
+        - home
+        - settings
+        - onboarding
+        - unknown
+    privacy_notes: Do not include full firmware version string, version number detail, or device address.
+    ga4_custom_definitions:
+      - failure_reason
+      - surface
+      - entry_point
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_version_volume
+      - device_upgrade_funnel
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Simulate an old firmware or old app version scenario that triggers a forced upgrade gate and confirm device_version_gate_blocked appears with an approved failure_reason.
+      - Confirm no full firmware version string, version number detail, or device address is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Simulate a version gate block and confirm device_version_gate_blocked appears with an approved failure_reason and platform=ios.
+      - Confirm no firmware version string or device address is present.
+
+  # ── Firmware Upgrade (OTA) ────────────────────────────────────────────────
+
+  - event_name: device_ota_started
+    goal: Measure OTA firmware upgrade initiation volume.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User confirms starting a firmware upgrade (OtaViewModel.startOtaFromRemote()) or a forced upgrade begins from the version gate flow.
+    trigger_ios: User confirms starting a firmware upgrade or a forced upgrade begins.
+    required_properties:
+      - entry_point
+      - trigger_source
+      - surface
+    optional_properties:
+      - upgrade_mode
+    allowed_values:
+      entry_point:
+        - settings
+        - device
+        - onboarding
+        - home
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+      surface:
+        - device
+        - settings
+        - onboarding
+        - unknown
+      upgrade_mode:
+        - user_initiated
+        - forced
+        - unknown
+    privacy_notes: Do not include firmware package URL, firmware hash, firmware version string, or device address.
+    ga4_custom_definitions:
+      - entry_point
+      - trigger_source
+      - surface
+      - upgrade_mode
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_ota_funnel
+      - device_upgrade_volume
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Start a user-initiated OTA from the device settings page and confirm device_ota_started appears with upgrade_mode=user_initiated and trigger_source=user.
+      - Simulate a forced-upgrade scenario and confirm device_ota_started appears with upgrade_mode=forced and trigger_source=system.
+      - Confirm no firmware package URL, hash, version string, or device address is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Start OTA flows for each upgrade_mode and confirm device_ota_started appears with the correct values and platform=ios.
+      - Confirm no firmware package URL, hash, version string, or device address is present.
+
+  - event_name: device_ota_completed
+    goal: Measure OTA firmware upgrade success rate.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Firmware upgrade completes and the device enters the post-upgrade result state.
+    trigger_ios: Firmware upgrade completes and the device enters the post-upgrade result state.
+    required_properties:
+      - surface
+      - trigger_source
+    optional_properties:
+      - upgrade_mode
+    allowed_values:
+      surface:
+        - device
+        - settings
+        - onboarding
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+      upgrade_mode:
+        - user_initiated
+        - forced
+        - unknown
+    privacy_notes: Do not include firmware version string, firmware package details, or device address.
+    ga4_custom_definitions:
+      - surface
+      - trigger_source
+      - upgrade_mode
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_ota_funnel
+      - device_ota_success_rate
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Complete an OTA and confirm device_ota_completed appears once with platform=android.
+      - Confirm no firmware version string, package details, or device address is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Complete an OTA and confirm device_ota_completed appears with platform=ios.
+      - Confirm no firmware version string, package details, or device address is present.
+
+  - event_name: device_ota_failed
+    goal: Identify OTA firmware upgrade failure reasons.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: OTA ends in a failure state due to interruption, timeout, or verification failure (mapped to approved failure_reason values).
+    trigger_ios: OTA ends in a failure state due to interruption, timeout, or verification failure.
+    required_properties:
+      - failure_reason
+      - surface
+    optional_properties:
+      - upgrade_mode
+      - entry_point
+    allowed_values:
+      failure_reason:
+        - network_error
+        - timeout
+        - permission_denied
+        - validation_failed
+        - unsupported_state
+        - sdk_error
+        - unknown
+      surface:
+        - device
+        - settings
+        - onboarding
+        - unknown
+      upgrade_mode:
+        - user_initiated
+        - forced
+        - unknown
+      entry_point:
+        - settings
+        - device
+        - onboarding
+        - home
+        - unknown
+    privacy_notes: Map OTA errors to approved failure_reason values. Do not include firmware log, raw error code, firmware version string, or device address.
+    ga4_custom_definitions:
+      - failure_reason
+      - surface
+      - upgrade_mode
+      - entry_point
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_ota_funnel
+      - device_ota_failure_breakdown
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Simulate OTA interruption, timeout, and verification failure scenarios and confirm device_ota_failed appears with approved failure_reason values.
+      - Confirm no firmware log, raw error code, firmware version string, or device address is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Simulate OTA failure scenarios and confirm device_ota_failed appears with approved failure_reason values and platform=ios.
+      - Confirm no firmware log, raw error code, firmware version string, or device address is present.
+
+  # ── Device Usage Overview ────────────────────────────────────────────────
+
+  - event_name: device_usage_wear_session_started
+    goal: Measure glasses wear-session starts with coarse local time and device state context.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Device usage coordinator observes a transition into wearing state and opens a wear session.
+    trigger_ios: Device usage coordinator observes a transition into wearing state and opens a wear session.
+    required_properties:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - trigger_source
+    optional_properties:
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+    allowed_values:
+      trigger_source:
+        - device
+        - system
+        - unknown
+    privacy_notes: local_date/local_hour/day_of_week are coarse client-local context. Do not include user timezone, precise location, device name, BLE/MAC address, serial number, or raw sensor stream.
+    ga4_custom_definitions:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - trigger_source
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_usage_wear_session_funnel
+      - device_usage_daily_active_wear
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Wear the glasses or simulate the in-ear state transition and confirm device_usage_wear_session_started appears once when a new session starts.
+      - Confirm only coarse time and boolean state context is present; no raw sensor data, device name, BLE/MAC address, or serial number is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Trigger a wear-session start and confirm device_usage_wear_session_started uses the same params and enum values as Android.
+      - Confirm no raw sensor data, device name, BLE/MAC address, or serial number is present.
+
+  - event_name: device_usage_wear_session_ended
+    goal: Measure wear-session duration and terminal state.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Device usage coordinator observes wearing state ending and closes an existing wear session.
+    trigger_ios: Device usage coordinator observes wearing state ending and closes an existing wear session.
+    required_properties:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - duration_ms
+      - duration_bucket
+    optional_properties:
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+    allowed_values:
+      duration_bucket:
+        - state_01_lt_1m
+        - state_02_1m_5m
+        - state_03_5m_15m
+        - state_04_15m_30m
+        - state_05_30m_1h
+        - state_06_1h_2h
+        - state_07_2h_4h
+        - state_08_gte_4h
+    privacy_notes: duration_ms is session length only. Do not include raw timestamps, timezone, precise location, device serial number, or sensor samples.
+    ga4_custom_definitions:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - duration_bucket
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+      - platform
+      - environment
+      - build_region
+    ga4_custom_metrics:
+      - duration_ms
+    dashboard_usage:
+      - device_usage_wear_session_funnel
+      - device_usage_wear_duration
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - End a wear session and confirm device_usage_wear_session_ended includes duration_ms and an approved state duration_bucket.
+      - Confirm no raw timestamps, timezone, precise location, device serial number, or sensor samples are present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - End a wear session and confirm device_usage_wear_session_ended uses the same duration bucket values as Android.
+      - Confirm no raw timestamps, timezone, precise location, device serial number, or sensor samples are present.
+
+  - event_name: device_usage_bt_connected
+    goal: Measure Bluetooth audio/profile connection session starts.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Device usage coordinator observes BT/A2DP/HFP usable connection state entering connected.
+    trigger_ios: Device usage coordinator observes Bluetooth usable connection state entering connected.
+    required_properties:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - trigger_source
+    optional_properties:
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+    allowed_values:
+      trigger_source:
+        - device
+        - system
+        - unknown
+    privacy_notes: Do not include Bluetooth device name, MAC address, profile ids, raw state dumps, or low-level error codes.
+    ga4_custom_definitions:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - trigger_source
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_usage_bt_connection_funnel
+      - device_usage_audio_connectivity
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Connect BT audio/profile state and confirm device_usage_bt_connected appears once at session start.
+      - Confirm no Bluetooth device name, MAC address, profile ids, raw state dump, or low-level error code is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Connect Bluetooth and confirm device_usage_bt_connected uses the same params as Android.
+      - Confirm no Bluetooth device name, MAC address, profile ids, or raw state dump is present.
+
+  - event_name: device_usage_bt_disconnected
+    goal: Measure Bluetooth connection session duration.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Device usage coordinator observes an active BT session leaving connected state.
+    trigger_ios: Device usage coordinator observes an active Bluetooth session leaving connected state.
+    required_properties:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - duration_ms
+      - duration_bucket
+    optional_properties:
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+    allowed_values:
+      duration_bucket:
+        - state_01_lt_1m
+        - state_02_1m_5m
+        - state_03_5m_15m
+        - state_04_15m_30m
+        - state_05_30m_1h
+        - state_06_1h_2h
+        - state_07_2h_4h
+        - state_08_gte_4h
+    privacy_notes: Do not include Bluetooth device name, MAC address, raw disconnect reason, or low-level profile state.
+    ga4_custom_definitions:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - duration_bucket
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+      - platform
+      - environment
+      - build_region
+    ga4_custom_metrics:
+      - duration_ms
+    dashboard_usage:
+      - device_usage_bt_connection_funnel
+      - device_usage_bt_duration
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Disconnect BT after an active session and confirm device_usage_bt_disconnected includes duration_ms and an approved state duration_bucket.
+      - Confirm no Bluetooth device name, MAC address, raw disconnect reason, or profile state dump is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Disconnect Bluetooth after an active session and confirm device_usage_bt_disconnected uses the same bucket values as Android.
+      - Confirm no Bluetooth device name, MAC address, or raw disconnect reason is present.
+
+  - event_name: device_usage_ble_connected
+    goal: Measure BLE control-channel connection session starts.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Device usage coordinator observes BLE control channel entering connected state.
+    trigger_ios: Device usage coordinator observes BLE control channel entering connected state.
+    required_properties:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - trigger_source
+    optional_properties:
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+    allowed_values:
+      trigger_source:
+        - device
+        - system
+        - unknown
+    privacy_notes: Do not include BLE address, scan result, service UUID list, raw packet data, or device serial number.
+    ga4_custom_definitions:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - trigger_source
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_usage_ble_connection_funnel
+      - device_usage_control_connectivity
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Connect BLE control channel and confirm device_usage_ble_connected appears once at session start.
+      - Confirm no BLE address, scan result, service UUID list, raw packet data, or device serial number is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Connect BLE and confirm device_usage_ble_connected uses the same params as Android.
+      - Confirm no BLE address, scan result, service UUID list, raw packet data, or serial number is present.
+
+  - event_name: device_usage_ble_disconnected
+    goal: Measure BLE control-channel connection duration.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Device usage coordinator observes an active BLE session leaving connected state.
+    trigger_ios: Device usage coordinator observes an active BLE session leaving connected state.
+    required_properties:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - duration_ms
+      - duration_bucket
+    optional_properties:
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+    allowed_values:
+      duration_bucket:
+        - state_01_lt_1m
+        - state_02_1m_5m
+        - state_03_5m_15m
+        - state_04_15m_30m
+        - state_05_30m_1h
+        - state_06_1h_2h
+        - state_07_2h_4h
+        - state_08_gte_4h
+    privacy_notes: Do not include BLE address, raw disconnect reason, service UUID list, raw packet data, or device serial number.
+    ga4_custom_definitions:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - duration_bucket
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+      - platform
+      - environment
+      - build_region
+    ga4_custom_metrics:
+      - duration_ms
+    dashboard_usage:
+      - device_usage_ble_connection_funnel
+      - device_usage_ble_duration
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Disconnect BLE after an active session and confirm device_usage_ble_disconnected includes duration_ms and an approved state duration_bucket.
+      - Confirm no BLE address, raw disconnect reason, service UUID list, packet data, or serial number is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Disconnect BLE after an active session and confirm device_usage_ble_disconnected uses the same bucket values as Android.
+      - Confirm no BLE address, raw disconnect reason, service UUID list, packet data, or serial number is present.
+
+  - event_name: device_usage_photo_capture_succeeded
+    goal: Measure successful photo capture command outcomes from the glasses.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Device usage coordinator observes a photo capture success from device-side capture reporting.
+    trigger_ios: Device usage coordinator observes a photo capture success from device-side capture reporting.
+    required_properties:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+    optional_properties:
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+    allowed_values: {}
+    privacy_notes: Do not include media file name, thumbnail, image content, capture path, EXIF data, precise capture location, or device serial number.
+    ga4_custom_definitions:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_usage_photo_capture_success
+      - device_usage_capture_reliability
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Capture a photo successfully on glasses and confirm device_usage_photo_capture_succeeded appears once.
+      - Confirm no file name, thumbnail, image content, capture path, EXIF data, precise location, or serial number is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Capture a photo successfully and confirm device_usage_photo_capture_succeeded uses the same params as Android.
+      - Confirm no file name, thumbnail, image content, capture path, EXIF data, precise location, or serial number is present.
+
+  - event_name: device_usage_photo_capture_failed
+    goal: Measure failed photo capture command outcomes from the glasses.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Device usage coordinator observes a photo capture failure or unsupported capture state.
+    trigger_ios: Device usage coordinator observes a photo capture failure or unsupported capture state.
+    required_properties:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - failure_reason
+    optional_properties:
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+    allowed_values:
+      failure_reason:
+        - network_error
+        - timeout
+        - interrupted
+        - unsupported_state
+        - device_disconnected
+        - bt_disconnected
+        - ble_disconnected
+        - low_battery
+        - device_busy
+        - storage_full
+        - device_error
+        - app_error
+        - sdk_error
+        - unknown
+    privacy_notes: Map failures to approved enum values. Do not include raw command payload, media file name, raw error, stack trace, capture path, or serial number.
+    ga4_custom_definitions:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - failure_reason
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_usage_photo_capture_failure
+      - device_usage_capture_reliability
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Simulate low battery, disconnected, and storage-full photo failures and confirm device_usage_photo_capture_failed uses approved failure_reason values.
+      - Confirm no raw command payload, file name, raw error, stack trace, capture path, or serial number is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Simulate photo capture failures and confirm device_usage_photo_capture_failed uses the same failure_reason values as Android.
+      - Confirm no raw command payload, file name, raw error, stack trace, capture path, or serial number is present.
+
+  - event_name: device_usage_video_record_started
+    goal: Measure video recording session starts on the glasses.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Device usage coordinator observes video recording entering active state.
+    trigger_ios: Device usage coordinator observes video recording entering active state.
+    required_properties:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - trigger_source
+    optional_properties:
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+    allowed_values:
+      trigger_source:
+        - device
+        - system
+        - unknown
+    privacy_notes: Do not include media file name, thumbnail, video content, capture path, EXIF data, precise location, or serial number.
+    ga4_custom_definitions:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - trigger_source
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_usage_video_record_funnel
+      - device_usage_capture_volume
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Start video recording and confirm device_usage_video_record_started appears once at session start.
+      - Confirm no file name, thumbnail, video content, capture path, EXIF data, precise location, or serial number is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Start video recording and confirm device_usage_video_record_started uses the same params as Android.
+      - Confirm no file name, thumbnail, video content, capture path, EXIF data, precise location, or serial number is present.
+
+  - event_name: device_usage_video_record_ended
+    goal: Measure video recording completion and duration on the glasses.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Device usage coordinator observes an active video recording session ending successfully.
+    trigger_ios: Device usage coordinator observes an active video recording session ending successfully.
+    required_properties:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - duration_ms
+      - duration_bucket
+    optional_properties:
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+    allowed_values:
+      duration_bucket:
+        - interaction_01_lt_10s
+        - interaction_02_10s_30s
+        - interaction_03_30s_1m
+        - interaction_04_1m_3m
+        - interaction_05_3m_5m
+        - interaction_06_5m_10m
+        - interaction_07_10m_30m
+        - interaction_08_gte_30m
+    privacy_notes: duration_ms is recording length only. Do not include media file name, video content, capture path, EXIF data, precise location, or serial number.
+    ga4_custom_definitions:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - duration_bucket
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+      - platform
+      - environment
+      - build_region
+    ga4_custom_metrics:
+      - duration_ms
+    dashboard_usage:
+      - device_usage_video_record_funnel
+      - device_usage_video_record_duration
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - End video recording successfully and confirm device_usage_video_record_ended includes duration_ms and an approved interaction duration_bucket.
+      - Confirm no file name, video content, capture path, EXIF data, precise location, or serial number is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - End video recording successfully and confirm device_usage_video_record_ended uses the same bucket values as Android.
+      - Confirm no file name, video content, capture path, EXIF data, precise location, or serial number is present.
+
+  - event_name: device_usage_video_record_failed
+    goal: Measure failed video recording sessions and failure reasons.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Device usage coordinator observes video recording failure before or during an active recording session.
+    trigger_ios: Device usage coordinator observes video recording failure before or during an active recording session.
+    required_properties:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - failure_reason
+    optional_properties:
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+      - duration_ms
+      - duration_bucket
+    allowed_values:
+      failure_reason:
+        - timeout
+        - interrupted
+        - unsupported_state
+        - device_disconnected
+        - bt_disconnected
+        - ble_disconnected
+        - low_battery
+        - device_busy
+        - storage_full
+        - device_error
+        - app_error
+        - sdk_error
+        - unknown
+      duration_bucket:
+        - interaction_01_lt_10s
+        - interaction_02_10s_30s
+        - interaction_03_30s_1m
+        - interaction_04_1m_3m
+        - interaction_05_3m_5m
+        - interaction_06_5m_10m
+        - interaction_07_10m_30m
+        - interaction_08_gte_30m
+    privacy_notes: Map failures to approved enum values. Do not include raw command payload, media file name, video content, raw error, stack trace, or serial number.
+    ga4_custom_definitions:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - failure_reason
+      - duration_bucket
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+      - platform
+      - environment
+      - build_region
+    ga4_custom_metrics:
+      - duration_ms
+    dashboard_usage:
+      - device_usage_video_record_funnel
+      - device_usage_video_record_failure
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Simulate low battery, storage-full, interrupted, and disconnected video failures; confirm approved failure_reason values and optional duration data only when a session existed.
+      - Confirm no raw command payload, file name, video content, raw error, stack trace, or serial number is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Simulate video recording failures and confirm device_usage_video_record_failed uses the same failure_reason and bucket values as Android.
+      - Confirm no raw command payload, file name, video content, raw error, stack trace, or serial number is present.
+
+  - event_name: device_usage_audio_record_started
+    goal: Measure audio recording session starts on the glasses.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Device usage coordinator observes audio recording entering active state.
+    trigger_ios: Device usage coordinator observes audio recording entering active state.
+    required_properties:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - trigger_source
+    optional_properties:
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+    allowed_values:
+      trigger_source:
+        - device
+        - system
+        - unknown
+    privacy_notes: Do not include audio file name, transcript, audio content, capture path, raw command payload, or serial number.
+    ga4_custom_definitions:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - trigger_source
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_usage_audio_record_funnel
+      - device_usage_audio_record_volume
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Start audio recording and confirm device_usage_audio_record_started appears once at session start.
+      - Confirm no audio file name, transcript, audio content, capture path, raw command payload, or serial number is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Start audio recording and confirm device_usage_audio_record_started uses the same params as Android.
+      - Confirm no audio file name, transcript, audio content, capture path, raw command payload, or serial number is present.
+
+  - event_name: device_usage_audio_record_ended
+    goal: Measure audio recording completion and duration on the glasses.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Device usage coordinator observes an active audio recording session ending successfully.
+    trigger_ios: Device usage coordinator observes an active audio recording session ending successfully.
+    required_properties:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - duration_ms
+      - duration_bucket
+    optional_properties:
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+    allowed_values:
+      duration_bucket:
+        - interaction_01_lt_10s
+        - interaction_02_10s_30s
+        - interaction_03_30s_1m
+        - interaction_04_1m_3m
+        - interaction_05_3m_5m
+        - interaction_06_5m_10m
+        - interaction_07_10m_30m
+        - interaction_08_gte_30m
+    privacy_notes: duration_ms is recording length only. Do not include audio file name, transcript, audio content, capture path, raw timestamps, or serial number.
+    ga4_custom_definitions:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - duration_bucket
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+      - platform
+      - environment
+      - build_region
+    ga4_custom_metrics:
+      - duration_ms
+    dashboard_usage:
+      - device_usage_audio_record_funnel
+      - device_usage_audio_record_duration
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - End audio recording successfully and confirm device_usage_audio_record_ended includes duration_ms and an approved interaction duration_bucket.
+      - Confirm no audio file name, transcript, audio content, capture path, raw timestamps, or serial number is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - End audio recording successfully and confirm device_usage_audio_record_ended uses the same bucket values as Android.
+      - Confirm no audio file name, transcript, audio content, capture path, raw timestamps, or serial number is present.
+
+  - event_name: device_usage_audio_record_failed
+    goal: Measure failed audio recording sessions and failure reasons.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Device usage coordinator observes audio recording failure before or during an active recording session.
+    trigger_ios: Device usage coordinator observes audio recording failure before or during an active recording session.
+    required_properties:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - failure_reason
+    optional_properties:
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+      - duration_ms
+      - duration_bucket
+    allowed_values:
+      failure_reason:
+        - timeout
+        - interrupted
+        - unsupported_state
+        - device_disconnected
+        - bt_disconnected
+        - ble_disconnected
+        - low_battery
+        - device_busy
+        - storage_full
+        - device_error
+        - app_error
+        - sdk_error
+        - unknown
+      duration_bucket:
+        - interaction_01_lt_10s
+        - interaction_02_10s_30s
+        - interaction_03_30s_1m
+        - interaction_04_1m_3m
+        - interaction_05_3m_5m
+        - interaction_06_5m_10m
+        - interaction_07_10m_30m
+        - interaction_08_gte_30m
+    privacy_notes: Map failures to approved enum values. Do not include raw command payload, audio file name, transcript, audio content, raw error, stack trace, or serial number.
+    ga4_custom_definitions:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - failure_reason
+      - duration_bucket
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+      - platform
+      - environment
+      - build_region
+    ga4_custom_metrics:
+      - duration_ms
+    dashboard_usage:
+      - device_usage_audio_record_funnel
+      - device_usage_audio_record_failure
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Simulate low battery, storage-full, interrupted, and disconnected audio failures; confirm approved failure_reason values and optional duration data only when a session existed.
+      - Confirm no raw command payload, audio file name, transcript, audio content, raw error, stack trace, or serial number is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Simulate audio recording failures and confirm device_usage_audio_record_failed uses the same failure_reason and bucket values as Android.
+      - Confirm no raw command payload, audio file name, transcript, audio content, raw error, stack trace, or serial number is present.
+
+  - event_name: device_usage_ai_chat_started
+    goal: Measure device-origin AI Chat session starts.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Device usage coordinator observes device-origin AI Chat entering active state.
+    trigger_ios: Device usage coordinator observes device-origin AI Chat entering active state.
+    required_properties:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - trigger_source
+    optional_properties:
+      - voice_source
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+    allowed_values:
+      trigger_source:
+        - device
+        - system
+        - unknown
+      voice_source:
+        - device_bluetooth
+        - app_voice_chat
+        - kws_wake
+        - siri_shortcut
+        - unknown
+    privacy_notes: Do not include prompt text, transcript, audio content, answer text, conversation id, message id, raw command payload, or serial number.
+    ga4_custom_definitions:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - trigger_source
+      - voice_source
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_usage_ai_chat_funnel
+      - device_usage_ai_chat_volume
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Start device-origin AI Chat and confirm device_usage_ai_chat_started appears once with approved voice_source when available.
+      - Confirm no prompt text, transcript, audio content, answer text, conversation id, message id, raw command payload, or serial number is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Start device-origin AI Chat and confirm device_usage_ai_chat_started uses the same params as Android.
+      - Confirm no prompt text, transcript, audio content, answer text, conversation id, message id, raw command payload, or serial number is present.
+
+  - event_name: device_usage_ai_chat_ended
+    goal: Measure device-origin AI Chat completion and duration.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Device usage coordinator observes an active device-origin AI Chat session ending normally.
+    trigger_ios: Device usage coordinator observes an active device-origin AI Chat session ending normally.
+    required_properties:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - duration_ms
+      - duration_bucket
+    optional_properties:
+      - termination_reason
+      - voice_source
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+    allowed_values:
+      duration_bucket:
+        - interaction_01_lt_10s
+        - interaction_02_10s_30s
+        - interaction_03_30s_1m
+        - interaction_04_1m_3m
+        - interaction_05_3m_5m
+        - interaction_06_5m_10m
+        - interaction_07_10m_30m
+        - interaction_08_gte_30m
+      termination_reason:
+        - manual_stop
+        - hardware_command
+        - system_interrupt
+        - audio_timeout
+        - ai_completed
+        - rtc_failed
+        - remote_disconnect
+        - credits_exhausted
+        - connection_timeout
+        - hardware_disconnect
+        - tool_execution_completed
+        - unknown
+      voice_source:
+        - device_bluetooth
+        - app_voice_chat
+        - kws_wake
+        - siri_shortcut
+        - unknown
+    privacy_notes: duration_ms is session length only. Do not include prompt text, transcript, audio content, answer text, conversation id, message id, raw errors, or serial number.
+    ga4_custom_definitions:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - duration_bucket
+      - termination_reason
+      - voice_source
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+      - platform
+      - environment
+      - build_region
+    ga4_custom_metrics:
+      - duration_ms
+    dashboard_usage:
+      - device_usage_ai_chat_funnel
+      - device_usage_ai_chat_duration
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - End device-origin AI Chat normally and confirm device_usage_ai_chat_ended includes duration_ms and an approved interaction duration_bucket.
+      - Confirm no prompt text, transcript, audio content, answer text, conversation id, message id, raw errors, or serial number is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - End device-origin AI Chat normally and confirm device_usage_ai_chat_ended uses the same bucket and termination values as Android.
+      - Confirm no prompt text, transcript, audio content, answer text, conversation id, message id, raw errors, or serial number is present.
+
+  - event_name: device_usage_ai_chat_failed
+    goal: Measure device-origin AI Chat failures and failure reasons.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Device usage coordinator observes device-origin AI Chat failure before or during an active session.
+    trigger_ios: Device usage coordinator observes device-origin AI Chat failure before or during an active session.
+    required_properties:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - failure_reason
+    optional_properties:
+      - duration_ms
+      - duration_bucket
+      - voice_source
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+    allowed_values:
+      failure_reason:
+        - network_error
+        - network_unavailable
+        - timeout
+        - unauthorized
+        - cancelled
+        - interrupted
+        - unsupported_state
+        - device_disconnected
+        - bt_disconnected
+        - ble_disconnected
+        - low_battery
+        - device_busy
+        - device_error
+        - app_error
+        - sdk_error
+        - unknown
+      duration_bucket:
+        - interaction_01_lt_10s
+        - interaction_02_10s_30s
+        - interaction_03_30s_1m
+        - interaction_04_1m_3m
+        - interaction_05_3m_5m
+        - interaction_06_5m_10m
+        - interaction_07_10m_30m
+        - interaction_08_gte_30m
+      voice_source:
+        - device_bluetooth
+        - app_voice_chat
+        - kws_wake
+        - siri_shortcut
+        - unknown
+    privacy_notes: Map failures to approved enum values. Do not include prompt text, transcript, audio content, answer text, conversation id, message id, request id, response body, raw error, stack trace, or serial number.
+    ga4_custom_definitions:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - failure_reason
+      - duration_bucket
+      - voice_source
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+      - platform
+      - environment
+      - build_region
+    ga4_custom_metrics:
+      - duration_ms
+    dashboard_usage:
+      - device_usage_ai_chat_funnel
+      - device_usage_ai_chat_failure
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Simulate device-origin AI Chat network, timeout, disconnected, and unsupported-state failures; confirm approved failure_reason values.
+      - Confirm no prompt text, transcript, audio content, answer text, ids, request/response payloads, raw error, stack trace, or serial number is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Simulate device-origin AI Chat failures and confirm device_usage_ai_chat_failed uses the same failure_reason and bucket values as Android.
+      - Confirm no prompt text, transcript, audio content, answer text, ids, request/response payloads, raw error, stack trace, or serial number is present.
+
+  - event_name: device_usage_media_playback_started
+    goal: Measure glasses media playback session starts.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Device usage coordinator observes media playback entering active playing state on the glasses.
+    trigger_ios: Device usage coordinator observes media playback entering active playing state on the glasses.
+    required_properties:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - trigger_source
+    optional_properties:
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+    allowed_values:
+      trigger_source:
+        - device
+        - system
+        - unknown
+    privacy_notes: Do not include media file name, title, URL, playback position, audio content, or serial number.
+    ga4_custom_definitions:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - trigger_source
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_usage_media_playback_funnel
+      - device_usage_media_playback_volume
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Start media playback on glasses and confirm device_usage_media_playback_started appears once at session start.
+      - Confirm no file name, title, URL, playback position, audio content, or serial number is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Start media playback and confirm device_usage_media_playback_started uses the same params as Android.
+      - Confirm no file name, title, URL, playback position, audio content, or serial number is present.
+
+  - event_name: device_usage_media_playback_ended
+    goal: Measure glasses media playback duration.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Device usage coordinator observes active media playback ending on the glasses.
+    trigger_ios: Device usage coordinator observes active media playback ending on the glasses.
+    required_properties:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - duration_ms
+      - duration_bucket
+    optional_properties:
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+    allowed_values:
+      duration_bucket:
+        - audio_01_lt_30s
+        - audio_02_30s_1m
+        - audio_03_1m_3m
+        - audio_04_3m_10m
+        - audio_05_10m_30m
+        - audio_06_30m_1h
+        - audio_07_gte_1h
+    privacy_notes: duration_ms is playback session length only. Do not include media file name, title, URL, playback position, audio content, or serial number.
+    ga4_custom_definitions:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - duration_bucket
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+      - platform
+      - environment
+      - build_region
+    ga4_custom_metrics:
+      - duration_ms
+    dashboard_usage:
+      - device_usage_media_playback_funnel
+      - device_usage_media_playback_duration
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - End media playback and confirm device_usage_media_playback_ended includes duration_ms and an approved audio duration_bucket.
+      - Confirm no file name, title, URL, playback position, audio content, or serial number is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - End media playback and confirm device_usage_media_playback_ended uses the same bucket values as Android.
+      - Confirm no file name, title, URL, playback position, audio content, or serial number is present.
+
+  - event_name: device_usage_call_started
+    goal: Measure phone call session starts while glasses are connected.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Device usage coordinator observes call audio/session entering active state.
+    trigger_ios: Device usage coordinator observes call audio/session entering active state.
+    required_properties:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - trigger_source
+    optional_properties:
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+    allowed_values:
+      trigger_source:
+        - device
+        - system
+        - unknown
+    privacy_notes: Do not include phone number, contact name, caller id, call id, audio content, or serial number.
+    ga4_custom_definitions:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - trigger_source
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_usage_call_funnel
+      - device_usage_call_volume
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Start a call session and confirm device_usage_call_started appears once at session start.
+      - Confirm no phone number, contact name, caller id, call id, audio content, or serial number is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Start a call session and confirm device_usage_call_started uses the same params as Android.
+      - Confirm no phone number, contact name, caller id, call id, audio content, or serial number is present.
+
+  - event_name: device_usage_call_ended
+    goal: Measure phone call duration while glasses are connected.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Device usage coordinator observes an active call session ending.
+    trigger_ios: Device usage coordinator observes an active call session ending.
+    required_properties:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - duration_ms
+      - duration_bucket
+    optional_properties:
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+    allowed_values:
+      duration_bucket:
+        - audio_01_lt_30s
+        - audio_02_30s_1m
+        - audio_03_1m_3m
+        - audio_04_3m_10m
+        - audio_05_10m_30m
+        - audio_06_30m_1h
+        - audio_07_gte_1h
+    privacy_notes: duration_ms is call session length only. Do not include phone number, contact name, caller id, call id, audio content, or serial number.
+    ga4_custom_definitions:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - duration_bucket
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+      - platform
+      - environment
+      - build_region
+    ga4_custom_metrics:
+      - duration_ms
+    dashboard_usage:
+      - device_usage_call_funnel
+      - device_usage_call_duration
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - End a call session and confirm device_usage_call_ended includes duration_ms and an approved audio duration_bucket.
+      - Confirm no phone number, contact name, caller id, call id, audio content, or serial number is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - End a call session and confirm device_usage_call_ended uses the same bucket values as Android.
+      - Confirm no phone number, contact name, caller id, call id, audio content, or serial number is present.
+
+  - event_name: device_usage_charging_started
+    goal: Measure charging session starts.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Device usage coordinator observes charging state entering true.
+    trigger_ios: Device usage coordinator observes charging state entering true.
+    required_properties:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - trigger_source
+    optional_properties:
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+    allowed_values:
+      trigger_source:
+        - device
+        - system
+        - unknown
+    privacy_notes: Do not include charger identifier, device serial number, raw battery telemetry stream, or precise location.
+    ga4_custom_definitions:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - trigger_source
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_usage_charging_funnel
+      - device_usage_power_behavior
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Start charging and confirm device_usage_charging_started appears once at session start.
+      - Confirm no charger identifier, serial number, raw battery telemetry stream, or precise location is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Start charging and confirm device_usage_charging_started uses the same params as Android.
+      - Confirm no charger identifier, serial number, raw battery telemetry stream, or precise location is present.
+
+  - event_name: device_usage_charging_ended
+    goal: Measure charging session duration.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Device usage coordinator observes an active charging session ending.
+    trigger_ios: Device usage coordinator observes an active charging session ending.
+    required_properties:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - duration_ms
+      - duration_bucket
+    optional_properties:
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+    allowed_values:
+      duration_bucket:
+        - state_01_lt_1m
+        - state_02_1m_5m
+        - state_03_5m_15m
+        - state_04_15m_30m
+        - state_05_30m_1h
+        - state_06_1h_2h
+        - state_07_2h_4h
+        - state_08_gte_4h
+    privacy_notes: duration_ms is charging session length only. Do not include charger identifier, raw battery telemetry stream, precise location, or serial number.
+    ga4_custom_definitions:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - duration_bucket
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+      - platform
+      - environment
+      - build_region
+    ga4_custom_metrics:
+      - duration_ms
+    dashboard_usage:
+      - device_usage_charging_funnel
+      - device_usage_charging_duration
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - End charging and confirm device_usage_charging_ended includes duration_ms and an approved state duration_bucket.
+      - Confirm no charger identifier, raw battery telemetry stream, precise location, or serial number is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - End charging and confirm device_usage_charging_ended uses the same bucket values as Android.
+      - Confirm no charger identifier, raw battery telemetry stream, precise location, or serial number is present.
+
+  - event_name: device_usage_battery_warning_triggered
+    goal: Measure low/critical battery and charger state warning events.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Device usage coordinator detects a low-battery, critical-battery, charger-plugged, or charger-unplugged warning boundary.
+    trigger_ios: Device usage coordinator detects a low-battery, critical-battery, charger-plugged, or charger-unplugged warning boundary.
+    required_properties:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - warning_kind
+    optional_properties:
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+    allowed_values:
+      warning_kind:
+        - low_battery
+        - critical_battery
+        - charger_plugged
+        - charger_unplugged
+        - unknown
+    privacy_notes: battery_level is numeric device battery percentage only. Do not include charger identifier, raw telemetry stream, precise location, or serial number.
+    ga4_custom_definitions:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - warning_kind
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_usage_battery_warning
+      - device_usage_power_behavior
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Trigger low battery, critical battery, charger plugged, and charger unplugged boundaries and confirm approved warning_kind values.
+      - Confirm no charger identifier, raw telemetry stream, precise location, or serial number is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Trigger battery warning boundaries and confirm device_usage_battery_warning_triggered uses the same warning_kind values as Android.
+      - Confirm no charger identifier, raw telemetry stream, precise location, or serial number is present.
+
+  - event_name: device_usage_battery_state_sampled
+    goal: Measure abnormal battery change samples for power health analysis.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Device usage battery gate records a rapid battery drop or rise sample that passes throttling.
+    trigger_ios: Device usage battery gate records a rapid battery drop or rise sample that passes throttling.
+    required_properties:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - battery_change_type
+    optional_properties:
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+    allowed_values:
+      battery_change_type:
+        - rapid_drop
+        - rapid_rise
+    privacy_notes: battery_level and battery_change_type are coarse power-health fields. Do not include raw telemetry stream, charger identifier, precise location, serial number, or log content.
+    ga4_custom_definitions:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - battery_change_type
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_usage_battery_state
+      - device_usage_power_health
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Simulate rapid battery drop and rapid battery rise samples and confirm approved battery_change_type values.
+      - Confirm no raw telemetry stream, charger identifier, precise location, serial number, or log content is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Simulate battery state samples and confirm device_usage_battery_state_sampled uses the same values as Android.
+      - Confirm no raw telemetry stream, charger identifier, precise location, serial number, or log content is present.
+
+  - event_name: device_usage_media_sync_state_changed
+    goal: Measure device media-sync pipeline state changes at coarse state boundaries.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Media sync or remote transfer coordinator reports an approved AP/media-server/import state transition.
+    trigger_ios: Media sync or remote transfer coordinator reports an approved AP/media-server/import state transition.
+    required_properties:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - sync_state
+    optional_properties:
+      - item_count_bucket
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+    allowed_values:
+      sync_state:
+        - ap_idle
+        - ap_started
+        - ap_stopped
+        - ap_error
+        - media_server_idle
+        - media_server_started
+        - media_server_stopped
+        - media_server_error
+        - wait_import
+        - importing
+        - imported
+        - unknown
+      item_count_bucket:
+        - "1"
+        - "2_5"
+        - "6_20"
+        - "21_100"
+        - "100_plus"
+        - unknown
+    privacy_notes: Use only approved sync_state and item_count_bucket enums. Do not include media file names, raw device transfer state, raw server payloads, device address, or log content.
+    ga4_custom_definitions:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - sync_state
+      - item_count_bucket
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_usage_media_sync_state
+      - device_usage_media_sync_pipeline
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Trigger AP start/stop, media server start/stop, wait_import, importing, and imported states and confirm approved sync_state values.
+      - Confirm no media file names, raw transfer state, raw server payloads, device address, or log content is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Trigger equivalent media sync states and confirm device_usage_media_sync_state_changed uses the same sync_state values as Android.
+      - Confirm no media file names, raw transfer state, raw server payloads, device address, or log content is present.
+
+  - event_name: device_usage_media_sync_failed
+    goal: Measure media-sync pipeline failures with coarse source and reason.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Media sync or remote transfer coordinator reports an approved AP/media-server/import failure boundary.
+    trigger_ios: Media sync or remote transfer coordinator reports an approved AP/media-server/import failure boundary.
+    required_properties:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - sync_state
+      - error_source
+      - failure_reason
+    optional_properties:
+      - item_count_bucket
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+    allowed_values:
+      sync_state:
+        - ap_idle
+        - ap_started
+        - ap_stopped
+        - ap_error
+        - media_server_idle
+        - media_server_started
+        - media_server_stopped
+        - media_server_error
+        - wait_import
+        - importing
+        - imported
+        - unknown
+      error_source:
+        - device
+        - app
+        - network
+        - media_server
+        - bt
+        - isp
+        - unknown
+      failure_reason:
+        - network_error
+        - network_unavailable
+        - permission_denied
+        - validation_failed
+        - timeout
+        - cancelled
+        - interrupted
+        - unsupported_state
+        - device_disconnected
+        - bt_disconnected
+        - ble_disconnected
+        - upload_failed
+        - file_missing
+        - decode_error
+        - unsupported_format
+        - low_battery
+        - device_busy
+        - storage_full
+        - media_sync_failed
+        - device_error
+        - app_error
+        - sdk_error
+        - unknown
+      item_count_bucket:
+        - "1"
+        - "2_5"
+        - "6_20"
+        - "21_100"
+        - "100_plus"
+        - unknown
+    privacy_notes: Map failures to approved enum values. Do not include media file names, raw transfer state, raw server payloads, raw errors, stack traces, device address, or log content.
+    ga4_custom_definitions:
+      - local_date
+      - local_hour
+      - day_of_week
+      - is_weekend
+      - sync_state
+      - error_source
+      - failure_reason
+      - item_count_bucket
+      - battery_level
+      - is_wearing
+      - bt_connected
+      - ble_connected
+      - charging
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - device_usage_media_sync_failure
+      - device_usage_media_sync_pipeline
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Simulate AP, media server, network, BT, ISP, app, and device failure sources and confirm approved error_source and failure_reason values.
+      - Confirm no media file names, raw transfer state, raw server payloads, raw errors, stack traces, device address, or log content is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Simulate equivalent media sync failures and confirm device_usage_media_sync_failed uses the same error_source and failure_reason values as Android.
+      - Confirm no media file names, raw transfer state, raw server payloads, raw errors, stack traces, device address, or log content is present.

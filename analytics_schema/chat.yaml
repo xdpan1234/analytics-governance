@@ -1,0 +1,644 @@
+schema_version: 2
+owner: chat
+platforms:
+- android
+- ios
+common_properties:
+  injected_by_adapter:
+  - platform
+  - environment
+  - build_region
+  - build_type
+  - app_version_name
+  - app_version_code
+  definitions:
+    platform: Lowercase client platform, such as android or ios.
+    environment: Analytics environment, test or prod.
+    build_region: Analytics build region. Current Android rule is prod -> us, test -> sg.
+    build_type: Client build type such as debug or release.
+    app_version_name: Public app version name injected by the client adapter.
+    app_version_code: Numeric app version code injected by the client adapter.
+implementation_contract:
+  android_contract_layer: domain:api:analytics
+  android_tracker: AnalyticsTracker
+  android_event_type: AnalyticsEvent
+  android_event_spec_type: AnalyticsEventSpec
+  android_provider_adapter: Ga4AnalyticsAdapter
+  android_direct_sdk_boundary: Only the app-level provider adapter may call FirebaseAnalytics. Business, feature, domain, and data code must use typed reporters or AnalyticsTracker.
+  ios_contract_layer: iOS analytics facade matching this schema
+  ios_provider_adapter: GA4/Firebase adapter behind the iOS facade
+  ios_direct_sdk_boundary: Only the iOS provider adapter may call Firebase Analytics.logEvent. Business code must use the facade.
+  required_tests:
+  - ga4_event_name_rules
+  - ga4_param_name_rules
+  - ga4_param_count_limit
+  - reserved_prefix_guardrails
+  - privacy_field_guardrails
+  - reporter_output_contract
+events:
+- event_name: chat_list_viewed
+  goal: Measure Chat entry exposure with the smallest cross-platform entry signal.
+  recommended_or_custom: custom
+  key_event: false
+  trigger_android: User opens Chat and the conversation list or default conversation region becomes visible.
+  trigger_ios: User opens Chat and the conversation list or default conversation region becomes visible.
+  required_properties:
+  - entry_point
+  - surface
+  optional_properties:
+  - trigger_source
+  allowed_values:
+    entry_point:
+    - chat_tab
+    - home
+    - device
+    - kws
+    - siri_shortcut
+    - app_shortcut
+    - deep_link
+    - push
+    - system_share
+    - unknown
+    surface:
+    - chat
+    - unknown
+    trigger_source:
+    - user
+    - system
+    - device
+    - server_push
+    - unknown
+  privacy_notes: Do not include conversation title, message content, session id, or raw list payload. Do not include chat text, prompts, answers, transcript text, audio content, image content, memory content, decrypted plaintext, tool arguments, command text, conversation ids, message ids, raw errors, request ids, response bodies, or stack traces.
+  ga4_custom_definitions:
+  - entry_point
+  - surface
+  - trigger_source
+  - platform
+  - environment
+  - build_region
+  dashboard_usage:
+  - chat_entry_funnel
+  - chat_list_exposure
+  verification_android:
+  - Enable GA4 DebugView for the Android app stream.
+  - Enter Chat from tab and Home and confirm chat_list_viewed fires once with approved entry_point and surface values.
+  - Confirm the event routes through the Android analytics tracker/adapter and uses platform=android.
+  - Confirm no chat text, prompt text, answer text, transcript text, audio, image content, memory content, decrypted plaintext, tool arguments, command text, ids, raw errors, or stack traces are present.
+  verification_ios:
+  - Enable GA4 DebugView for the iOS app stream.
+  - Enter Chat from tab/default entry and confirm chat_list_viewed fires once with the same enum values as Android.
+  - Confirm the iOS analytics facade emits the same event name, params, and enum values as Android with platform=ios.
+  - Confirm no chat text, prompt text, answer text, transcript text, audio, image content, memory content, decrypted plaintext, tool arguments, command text, ids, raw errors, or stack traces are present.
+- event_name: chat_session_opened
+  goal: Measure default, historical, and restored Chat session opens without platform-specific naming.
+  recommended_or_custom: custom
+  key_event: false
+  trigger_android: The app opens a default, historical, or restored Chat session.
+  trigger_ios: The app opens a default, historical, or restored Chat session.
+  required_properties:
+  - surface
+  - open_mode
+  optional_properties:
+  - entry_point
+  - trigger_source
+  allowed_values:
+    surface:
+    - chat
+    - unknown
+    open_mode:
+    - default_session
+    - history_session
+    - restored_session
+    - unknown
+    entry_point:
+    - chat_tab
+    - home
+    - device
+    - kws
+    - siri_shortcut
+    - app_shortcut
+    - deep_link
+    - push
+    - system_share
+    - unknown
+    trigger_source:
+    - user
+    - system
+    - device
+    - server_push
+    - unknown
+  privacy_notes: Do not include session id, conversation title, message content, or raw route parameters. Do not include chat text, prompts, answers, transcript text, audio content, image content, memory content, decrypted plaintext, tool arguments, command text, conversation ids, message ids, raw errors, request ids, response bodies, or stack traces.
+  ga4_custom_definitions:
+  - surface
+  - open_mode
+  - entry_point
+  - trigger_source
+  - platform
+  - environment
+  - build_region
+  dashboard_usage:
+  - chat_entry_funnel
+  - chat_session_open_rate
+  verification_android:
+  - Enable GA4 DebugView for the Android app stream.
+  - Open default, historical, and restored sessions where available and confirm open_mode uses approved enum values.
+  - Confirm the event routes through the Android analytics tracker/adapter and uses platform=android.
+  - Confirm no chat text, prompt text, answer text, transcript text, audio, image content, memory content, decrypted plaintext, tool arguments, command text, ids, raw errors, or stack traces are present.
+  verification_ios:
+  - Enable GA4 DebugView for the iOS app stream.
+  - Open default, historical, and restored sessions where available and confirm open_mode matches Android.
+  - Confirm the iOS analytics facade emits the same event name, params, and enum values as Android with platform=ios.
+  - Confirm no chat text, prompt text, answer text, transcript text, audio, image content, memory content, decrypted plaintext, tool arguments, command text, ids, raw errors, or stack traces are present.
+- event_name: chat_message_sent
+  goal: Measure user-submitted text and image-message attempts before AI response processing.
+  recommended_or_custom: custom
+  key_event: false
+  trigger_android: User submits a text message or a message with image attachments into Chat.
+  trigger_ios: User submits a text message or a message with image attachments into Chat.
+  required_properties:
+  - surface
+  - message_mode
+  optional_properties:
+  - entry_point
+  - trigger_source
+  allowed_values:
+    surface:
+    - chat
+    - unknown
+    message_mode:
+    - text
+    - image
+    - unknown
+    entry_point:
+    - chat_tab
+    - home
+    - device
+    - kws
+    - siri_shortcut
+    - app_shortcut
+    - deep_link
+    - push
+    - system_share
+    - unknown
+    trigger_source:
+    - user
+    - system
+    - device
+    - server_push
+    - unknown
+  privacy_notes: Do not include message content, prompt text, attachment names, image URLs, or message identifiers. Do not include chat text, prompts, answers, transcript text, audio content, image content, memory content, decrypted plaintext, tool arguments, command text, conversation ids, message ids, raw errors, request ids, response bodies, or stack traces.
+  ga4_custom_definitions:
+  - surface
+  - message_mode
+  - entry_point
+  - trigger_source
+  - platform
+  - environment
+  - build_region
+  dashboard_usage:
+  - chat_response_funnel
+  - chat_message_volume
+  verification_android:
+  - Enable GA4 DebugView for the Android app stream.
+  - Send a text message and a message with image attachment and confirm message_mode=text or image.
+  - Confirm the event routes through the Android analytics tracker/adapter and uses platform=android.
+  - Confirm no chat text, prompt text, answer text, transcript text, audio, image content, memory content, decrypted plaintext, tool arguments, command text, ids, raw errors, or stack traces are present.
+  verification_ios:
+  - Enable GA4 DebugView for the iOS app stream.
+  - Send a text message and a message with image attachment and confirm the same message_mode values as Android.
+  - Confirm the iOS analytics facade emits the same event name, params, and enum values as Android with platform=ios.
+  - Confirm no chat text, prompt text, answer text, transcript text, audio, image content, memory content, decrypted plaintext, tool arguments, command text, ids, raw errors, or stack traces are present.
+- event_name: chat_response_completed
+  goal: Measure successful AI response completion for text and image Chat messages.
+  recommended_or_custom: custom
+  key_event: false
+  trigger_android: AI response stream/request completes normally and a user-visible response result is formed.
+  trigger_ios: AI response stream/request completes normally and a user-visible response result is formed.
+  required_properties:
+  - surface
+  - message_mode
+  optional_properties:
+  - entry_point
+  - trigger_source
+  allowed_values:
+    surface:
+    - chat
+    - unknown
+    message_mode:
+    - text
+    - image
+    - unknown
+    entry_point:
+    - chat_tab
+    - home
+    - device
+    - kws
+    - siri_shortcut
+    - app_shortcut
+    - deep_link
+    - push
+    - system_share
+    - unknown
+    trigger_source:
+    - user
+    - system
+    - device
+    - server_push
+    - unknown
+  privacy_notes: Do not include answer content, prompt text, response chunks, raw stream payloads, or message identifiers. Do not include chat text, prompts, answers, transcript text, audio content, image content, memory content, decrypted plaintext, tool arguments, command text, conversation ids, message ids, raw errors, request ids, response bodies, or stack traces.
+  ga4_custom_definitions:
+  - surface
+  - message_mode
+  - entry_point
+  - trigger_source
+  - platform
+  - environment
+  - build_region
+  dashboard_usage:
+  - chat_response_funnel
+  - chat_response_completion_rate
+  verification_android:
+  - Enable GA4 DebugView for the Android app stream.
+  - Complete a text and image response and confirm only one chat_response_completed appears for each attempt.
+  - Confirm the event routes through the Android analytics tracker/adapter and uses platform=android.
+  - Confirm no chat text, prompt text, answer text, transcript text, audio, image content, memory content, decrypted plaintext, tool arguments, command text, ids, raw errors, or stack traces are present.
+  verification_ios:
+  - Enable GA4 DebugView for the iOS app stream.
+  - Complete a text and image response and confirm only one chat_response_completed appears for each attempt.
+  - Confirm the iOS analytics facade emits the same event name, params, and enum values as Android with platform=ios.
+  - Confirm no chat text, prompt text, answer text, transcript text, audio, image content, memory content, decrypted plaintext, tool arguments, command text, ids, raw errors, or stack traces are present.
+- event_name: chat_response_failed
+  goal: Measure AI response failures, cancellations, and image-preparation failures using one core failure event.
+  recommended_or_custom: custom
+  key_event: false
+  trigger_android: AI response request/stream or pre-response image preparation fails, times out, is cancelled, or is interrupted before a normal completed result.
+  trigger_ios: AI response request/stream or pre-response image preparation fails, times out, is cancelled, or is interrupted before a normal completed result.
+  required_properties:
+  - failure_reason
+  - surface
+  - message_mode
+  optional_properties:
+  - entry_point
+  - trigger_source
+  allowed_values:
+    failure_reason:
+    - network_error
+    - permission_denied
+    - validation_failed
+    - timeout
+    - unauthorized
+    - cancelled
+    - interrupted
+    - unsupported_state
+    - device_disconnected
+    - upload_failed
+    - file_missing
+    - decode_error
+    - unsupported_format
+    - sdk_error
+    - unknown
+    surface:
+    - chat
+    - unknown
+    message_mode:
+    - text
+    - image
+    - unknown
+    entry_point:
+    - chat_tab
+    - home
+    - device
+    - kws
+    - siri_shortcut
+    - app_shortcut
+    - deep_link
+    - push
+    - system_share
+    - unknown
+    trigger_source:
+    - user
+    - system
+    - device
+    - server_push
+    - unknown
+  privacy_notes: Map errors to failure_reason. Do not include raw server errors, response bodies, stream chunks, request ids, image URLs, file names, or stack traces.
+  ga4_custom_definitions:
+  - failure_reason
+  - surface
+  - message_mode
+  - entry_point
+  - trigger_source
+  - platform
+  - environment
+  - build_region
+  dashboard_usage:
+  - chat_response_funnel
+  - chat_failure_breakdown
+  verification_android:
+  - Enable GA4 DebugView for the Android app stream.
+  - Simulate network, timeout, cancellation, upload, file, decode, and unsupported-state failures and confirm approved failure_reason values.
+  - Confirm the event routes through the Android analytics tracker/adapter and uses platform=android.
+  - Confirm no chat text, prompt text, answer text, transcript text, audio, image content, memory content, decrypted plaintext, tool arguments, command text, ids, raw errors, or stack traces are present.
+  verification_ios:
+  - Enable GA4 DebugView for the iOS app stream.
+  - Simulate equivalent failures and confirm the same failure_reason values as Android.
+  - Confirm the iOS analytics facade emits the same event name, params, and enum values as Android with platform=ios.
+  - Confirm no chat text, prompt text, answer text, transcript text, audio, image content, memory content, decrypted plaintext, tool arguments, command text, ids, raw errors, or stack traces are present.
+- event_name: chat_voice_started
+  goal: Measure voice session starts at the stable active or starting boundary.
+  recommended_or_custom: custom
+  key_event: false
+  trigger_android: Voice Chat successfully enters the accepted starting or active boundary from Android app voice chat, device Bluetooth, or KWS wake.
+  trigger_ios: Voice Chat successfully enters the accepted starting or active boundary from device Bluetooth, app voice chat, Siri shortcut, or KWS wake.
+  required_properties:
+  - entry_point
+  - surface
+  - voice_source
+  optional_properties:
+  - trigger_source
+  allowed_values:
+    entry_point:
+    - chat_tab
+    - home
+    - device
+    - kws
+    - siri_shortcut
+    - app_shortcut
+    - deep_link
+    - push
+    - system_share
+    - unknown
+    surface:
+    - chat
+    - unknown
+    voice_source:
+    - device_bluetooth
+    - app_voice_chat
+    - siri_shortcut
+    - kws_wake
+    - unknown
+    trigger_source:
+    - user
+    - system
+    - device
+    - server_push
+    - unknown
+  privacy_notes: Do not include audio content, transcript text, wake-word audio, or raw recognition details. Do not include chat text, prompts, answers, transcript text, audio content, image content, memory content, decrypted plaintext, tool arguments, command text, conversation ids, message ids, raw errors, request ids, response bodies, or stack traces.
+  ga4_custom_definitions:
+  - entry_point
+  - surface
+  - voice_source
+  - trigger_source
+  - platform
+  - environment
+  - build_region
+  dashboard_usage:
+  - chat_voice_funnel
+  - chat_entry_breakdown
+  verification_android:
+  - Enable GA4 DebugView for the Android app stream.
+  - Start voice Chat from app/device/KWS paths and confirm voice_source uses approved enum values.
+  - Confirm Android never emits voice_source=siri_shortcut; Android has no VoiceChatSource.SIRI_SHORTCUT source.
+  - Confirm the event routes through the Android analytics tracker/adapter and uses platform=android.
+  - Confirm no chat text, prompt text, answer text, transcript text, audio, image content, memory content, decrypted plaintext, tool arguments, command text, ids, raw errors, or stack traces are present.
+  verification_ios:
+  - Enable GA4 DebugView for the iOS app stream.
+  - Start voice Chat from app/device/Siri/KWS paths and confirm voice_source uses approved enum values, including iOS-only siri_shortcut.
+  - Confirm the iOS analytics facade emits the same event name, params, and enum values as Android with platform=ios.
+  - Confirm no chat text, prompt text, answer text, transcript text, audio, image content, memory content, decrypted plaintext, tool arguments, command text, ids, raw errors, or stack traces are present.
+- event_name: chat_voice_start_failed
+  goal: Measure failures that block voice sessions before they reach the started boundary.
+  recommended_or_custom: custom
+  key_event: false
+  trigger_android: Voice Chat fails before entering the accepted starting or active boundary.
+  trigger_ios: Voice Chat fails before entering the accepted starting or active boundary.
+  required_properties:
+  - failure_reason
+  - surface
+  - voice_source
+  optional_properties:
+  - entry_point
+  - trigger_source
+  allowed_values:
+    failure_reason:
+    - network_error
+    - permission_denied
+    - validation_failed
+    - timeout
+    - unauthorized
+    - cancelled
+    - interrupted
+    - unsupported_state
+    - device_disconnected
+    - upload_failed
+    - file_missing
+    - decode_error
+    - unsupported_format
+    - sdk_error
+    - unknown
+    surface:
+    - chat
+    - unknown
+    voice_source:
+    - device_bluetooth
+    - app_voice_chat
+    - siri_shortcut
+    - kws_wake
+    - unknown
+    entry_point:
+    - chat_tab
+    - home
+    - device
+    - kws
+    - siri_shortcut
+    - app_shortcut
+    - deep_link
+    - push
+    - system_share
+    - unknown
+    trigger_source:
+    - user
+    - system
+    - device
+    - server_push
+    - unknown
+  privacy_notes: Map pre-start errors to failure_reason. Do not include raw RTC errors, audio data, transcripts, request ids, or stack traces.
+  ga4_custom_definitions:
+  - failure_reason
+  - surface
+  - voice_source
+  - entry_point
+  - trigger_source
+  - platform
+  - environment
+  - build_region
+  dashboard_usage:
+  - chat_voice_funnel
+  - chat_failure_breakdown
+  verification_android:
+  - Enable GA4 DebugView for the Android app stream.
+  - Simulate permission denial, RTC setup failure, KWS post-wake failure, and unsupported device state before start and confirm approved failure_reason values.
+  - Confirm Android never emits voice_source=siri_shortcut for start failures; Android has no VoiceChatSource.SIRI_SHORTCUT source.
+  - Confirm the event routes through the Android analytics tracker/adapter and uses platform=android.
+  - Confirm no chat text, prompt text, answer text, transcript text, audio, image content, memory content, decrypted plaintext, tool arguments, command text, ids, raw errors, or stack traces are present.
+  verification_ios:
+  - Enable GA4 DebugView for the iOS app stream.
+  - Simulate equivalent pre-start voice failures and confirm the same failure_reason mapping as Android.
+  - Confirm the iOS analytics facade emits the same event name, params, and enum values as Android with platform=ios.
+  - Confirm no chat text, prompt text, answer text, transcript text, audio, image content, memory content, decrypted plaintext, tool arguments, command text, ids, raw errors, or stack traces are present.
+- event_name: chat_voice_ended
+  goal: Measure the terminal outcome of already-started voice sessions using a shared termination reason enum.
+  recommended_or_custom: custom
+  key_event: false
+  trigger_android: A voice session that previously started terminates because the Android user stopped it, the device sent a hardware stop command, the system interrupted audio focus, or audio timed out.
+  trigger_ios: A voice session that previously started terminates because AI completed, user/device stopped it, timeout, RTC failure, disconnect, credits exhaustion, or another approved reason.
+  required_properties:
+  - surface
+  - voice_source
+  - termination_reason
+  optional_properties:
+  - entry_point
+  - trigger_source
+  allowed_values:
+    surface:
+    - chat
+    - unknown
+    voice_source:
+    - device_bluetooth
+    - app_voice_chat
+    - siri_shortcut
+    - kws_wake
+    - unknown
+    termination_reason:
+    - ai_completed
+    - manual_stop
+    - hardware_command
+    - system_interrupt
+    - audio_timeout
+    - rtc_failed
+    - remote_disconnect
+    - credits_exhausted
+    - connection_timeout
+    - hardware_disconnect
+    - tool_execution_completed
+    - unknown
+    entry_point:
+    - chat_tab
+    - home
+    - device
+    - kws
+    - siri_shortcut
+    - app_shortcut
+    - deep_link
+    - push
+    - system_share
+    - unknown
+    trigger_source:
+    - user
+    - system
+    - device
+    - server_push
+    - unknown
+  privacy_notes: Do not include transcript text, answer content, audio content, raw RTC payloads, raw termination errors, or stack traces. Do not include chat text, prompts, answers, transcript text, audio content, image content, memory content, decrypted plaintext, tool arguments, command text, conversation ids, message ids, raw errors, request ids, response bodies, or stack traces.
+  ga4_custom_definitions:
+  - surface
+  - voice_source
+  - termination_reason
+  - entry_point
+  - trigger_source
+  - platform
+  - environment
+  - build_region
+  dashboard_usage:
+  - chat_voice_funnel
+  - chat_voice_termination_breakdown
+  verification_android:
+  - Enable GA4 DebugView for the Android app stream.
+  - End voice Chat through manual stop, hardware command, system interrupt, and audio timeout where supported; confirm termination_reason is one of manual_stop, hardware_command, system_interrupt, or audio_timeout.
+  - Confirm Android does not emit ai_completed, rtc_failed, remote_disconnect, credits_exhausted, connection_timeout, hardware_disconnect, tool_execution_completed, or unknown until a real Android event source is implemented.
+  - Confirm Android never emits voice_source=siri_shortcut for ended sessions; Android has no VoiceChatSource.SIRI_SHORTCUT source.
+  - Confirm the event routes through the Android analytics tracker/adapter and uses platform=android.
+  - Confirm no chat text, prompt text, answer text, transcript text, audio, image content, memory content, decrypted plaintext, tool arguments, command text, ids, raw errors, or stack traces are present.
+  verification_ios:
+  - Enable GA4 DebugView for the iOS app stream.
+  - End voice Chat through equivalent paths and confirm termination_reason uses approved enum values, including any iOS-only or iOS-first terminal reasons.
+  - Confirm the iOS analytics facade emits the same event name, params, and enum values as Android with platform=ios.
+  - Confirm no chat text, prompt text, answer text, transcript text, audio, image content, memory content, decrypted plaintext, tool arguments, command text, ids, raw errors, or stack traces are present.
+- event_name: chat_feedback_submitted
+  goal: Measure Good, Bad, and report-issue feedback actions without collecting feedback text or contact information.
+  recommended_or_custom: custom
+  key_event: false
+  trigger_android: User submits quick feedback or report issue from a Chat message or detail surface.
+  trigger_ios: User submits quick feedback or report issue from a Chat message or detail surface.
+  required_properties:
+  - surface
+  - feedback_action
+  optional_properties:
+  - feedback_issue_type
+  - feedback_issue_count_bucket
+  - entry_point
+  - trigger_source
+  allowed_values:
+    surface:
+    - chat
+    - unknown
+    feedback_action:
+    - thumbs_up
+    - thumbs_down
+    - report_issue
+    feedback_issue_type:
+    - couldnt_hear_me
+    - misheard_me
+    - interrupted_me
+    - responded_too_slowly
+    - voice_didnt_sound_right
+    - didnt_like_responses
+    - other
+    - multiple
+    - unknown
+    feedback_issue_count_bucket:
+    - '0'
+    - '1'
+    - '2'
+    - 3_plus
+    entry_point:
+    - chat_tab
+    - home
+    - device
+    - kws
+    - siri_shortcut
+    - app_shortcut
+    - deep_link
+    - push
+    - system_share
+    - unknown
+    trigger_source:
+    - user
+    - system
+    - device
+    - server_push
+    - unknown
+  privacy_notes: Do not include issue description, email, nickname, serial number, contact details, chat text, prompt text, answer text, message id, or raw feedback payload. Do not include chat text, prompts, answers, transcript text, audio content, image content, memory content, decrypted plaintext, tool arguments, command text, conversation ids, message ids, raw errors, request ids, response bodies, or stack traces.
+  ga4_custom_definitions:
+  - surface
+  - feedback_action
+  - feedback_issue_type
+  - feedback_issue_count_bucket
+  - entry_point
+  - trigger_source
+  - platform
+  - environment
+  - build_region
+  dashboard_usage:
+  - chat_feedback_volume
+  - chat_feedback_breakdown
+  verification_android:
+  - Enable GA4 DebugView for the Android app stream.
+  - Submit thumbs_up, thumbs_down, single issue, and multi-issue feedback and confirm feedback_action and issue bucketing rules.
+  - Confirm the event routes through the Android analytics tracker/adapter and uses platform=android.
+  - Confirm no chat text, prompt text, answer text, transcript text, audio, image content, memory content, decrypted plaintext, tool arguments, command text, ids, raw errors, or stack traces are present.
+  verification_ios:
+  - Enable GA4 DebugView for the iOS app stream.
+  - Submit equivalent feedback paths and confirm feedback_action and issue bucketing rules match Android.
+  - Confirm the iOS analytics facade emits the same event name, params, and enum values as Android with platform=ios.
+  - Confirm no chat text, prompt text, answer text, transcript text, audio, image content, memory content, decrypted plaintext, tool arguments, command text, ids, raw errors, or stack traces are present.

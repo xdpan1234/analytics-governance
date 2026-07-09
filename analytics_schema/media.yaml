@@ -1,0 +1,1257 @@
+schema_version: 2
+owner: media
+platforms:
+  - android
+  - ios
+common_properties:
+  injected_by_adapter:
+    - platform
+    - environment
+    - build_region
+    - build_type
+    - app_version_name
+    - app_version_code
+  definitions:
+    platform: Lowercase client platform, such as android or ios.
+    environment: Analytics environment, test or prod.
+    build_region: Analytics build region. Current Android rule is prod -> us, test -> sg.
+    build_type: Client build type such as debug or release.
+    app_version_name: Public app version name injected by the client adapter.
+    app_version_code: Numeric app version code injected by the client adapter.
+implementation_contract:
+  android_contract_layer: "domain:api:analytics"
+  android_tracker: "AnalyticsTracker"
+  android_event_type: "AnalyticsEvent"
+  android_event_spec_type: "AnalyticsEventSpec"
+  android_provider_adapter: "Ga4AnalyticsAdapter"
+  android_direct_sdk_boundary: "Only the app-level provider adapter may call FirebaseAnalytics. Business, feature, domain, and data code must use typed reporters or AnalyticsTracker."
+  ios_contract_layer: "iOS analytics facade matching this schema"
+  ios_provider_adapter: "GA4/Firebase adapter behind the iOS facade"
+  ios_direct_sdk_boundary: "Only the iOS provider adapter may call Firebase Analytics.logEvent. Business code must use the facade."
+  required_tests:
+    - ga4_event_name_rules
+    - ga4_param_name_rules
+    - ga4_param_count_limit
+    - reserved_prefix_guardrails
+    - privacy_field_guardrails
+    - reporter_output_contract
+events:
+
+  # Media Import
+
+  - event_name: media_import_ready
+    goal: Measure how often users have a real opportunity to import device media before they choose to start or are blocked.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: A UI surface actually shows the pending-media import entry, card, banner, or button after the app has entered MediaSyncState.WaitImport. Do not emit from background service count notifications alone. Emit once per visible surface per pending import opportunity.
+    trigger_ios: Device/App discovers pending media and the app enters a user-visible import-ready state. Emit once per pending import opportunity.
+    required_properties:
+      - surface
+      - trigger_source
+    optional_properties:
+      - entry_point
+      - import_source
+      - item_count_bucket
+    allowed_values:
+      surface:
+        - home
+        - media_library
+        - photos
+        - gallery
+        - unknown
+      trigger_source:
+        - device
+        - system
+        - unknown
+      entry_point:
+        - home
+        - media_library
+        - photos
+        - device
+        - notification
+        - unknown
+      import_source:
+        - device_capture
+        - manual_retry
+        - unknown
+      item_count_bucket:
+        - "1"
+        - "2_5"
+        - "6_20"
+        - "21_100"
+        - "100_plus"
+        - unknown
+    privacy_notes: item_count_bucket must be a low-cardinality range bucket. Do not include file names, media content, exact file count, EXIF data, raw capture time, or device address.
+    ga4_custom_definitions:
+      - surface
+      - trigger_source
+      - entry_point
+      - import_source
+      - item_count_bucket
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - media_import_opportunity_funnel
+      - media_import_ready_volume
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Make the connected device report pending media and stay on Home; confirm media_import_ready appears once with surface=home before media_import_started.
+      - Open Photos/Media Library while the same pending opportunity is visible; confirm media_import_ready appears for surface=media_library.
+      - Confirm background service count notifications do not emit media_import_ready while no Home or Photos/Media Library import entry is visible.
+      - Confirm item_count_bucket uses an approved bucket and no exact file count is present.
+      - Confirm no file names, media content, EXIF, raw capture time, or device address is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Make the connected device report pending media; confirm media_import_ready appears once with platform=ios.
+      - Confirm no file names, media content, exact file count, EXIF, raw capture time, or device address is present.
+
+  - event_name: media_import_started
+    goal: Measure entry volume into the formal device-to-app media import flow.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User starts the formal media import from Home or Photos entry after all pre-start gates pass and MediaSyncService.startImport() begins transitioning toward Importing.
+    trigger_ios: User starts the formal media import from Home or Photos entry after all pre-start gates pass.
+    required_properties:
+      - entry_point
+      - trigger_source
+      - surface
+    optional_properties:
+      - import_source
+      - item_count_bucket
+    allowed_values:
+      entry_point:
+        - home
+        - photos
+        - device
+        - notification
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+      surface:
+        - home
+        - photos
+        - gallery
+        - unknown
+      import_source:
+        - device_capture
+        - manual_retry
+        - unknown
+      item_count_bucket:
+        - "1"
+        - "2_5"
+        - "6_20"
+        - "21_100"
+        - "100_plus"
+        - unknown
+    privacy_notes: item_count_bucket must be a low-cardinality range bucket. Do not include file names, media content, exact file count, EXIF data, raw capture time, or device address.
+    ga4_custom_definitions:
+      - entry_point
+      - trigger_source
+      - surface
+      - import_source
+      - item_count_bucket
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - media_import_opportunity_funnel
+      - media_import_entry_breakdown
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Trigger device-to-app media import from Home and from Photos entry; confirm media_import_started appears with the correct entry_point and import_source=device_capture.
+      - Trigger a manual retry and confirm media_import_started appears with import_source=manual_retry.
+      - Confirm media_import_started is not fired when permission or device-state gates block the import before the flow starts.
+      - Confirm no file names, media content, exact file count, EXIF, or capture time is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Trigger import flows and confirm media_import_started appears with platform=ios and the correct import_source.
+      - Confirm no file names, media content, exact file count, EXIF, or capture time is present.
+
+  - event_name: media_import_completed
+    goal: Measure full media import success rate.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Import completes successfully with at least one media item inserted into UniMediaStore and no known per-item failures.
+    trigger_ios: Import completes successfully without known per-item failures and media has been inserted into the unified media store.
+    required_properties:
+      - surface
+      - trigger_source
+    optional_properties:
+      - import_source
+      - item_count_bucket
+    allowed_values:
+      surface:
+        - home
+        - media_library
+        - photos
+        - gallery
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+      import_source:
+        - device_capture
+        - manual_retry
+        - unknown
+      item_count_bucket:
+        - "1"
+        - "2_5"
+        - "6_20"
+        - "21_100"
+        - "100_plus"
+        - unknown
+    privacy_notes: item_count_bucket must be a low-cardinality range bucket. Do not include file names, media content, exact file count, EXIF, or capture time.
+    ga4_custom_definitions:
+      - surface
+      - trigger_source
+      - import_source
+      - item_count_bucket
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - media_import_opportunity_funnel
+      - media_import_success_rate
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Complete a real or controlled import with at least one successfully inserted item and no known skipped items; confirm media_import_completed appears once with platform=android.
+      - Simulate a started import that produces zero successful items; confirm media_import_completed is not emitted.
+      - Confirm item_count_bucket falls within an approved bucket and reflects actual import size category.
+      - Confirm no file names, media content, exact file count, EXIF, or capture time is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Complete an import with no known skipped items and confirm media_import_completed appears with platform=ios.
+      - Confirm no file names, media content, exact file count, EXIF, or capture time is present.
+
+  - event_name: media_import_degraded
+    goal: Measure partial media import success where the batch completes but one or more items are skipped or fail locally.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Import batch reaches a usable completed state, but at least one media item was skipped or failed during item processing, such as duplicate cleanup, missing source media, decode failure, missing video sub media, or local store insertion failure.
+    trigger_ios: Import batch reaches a usable completed state, but at least one media item was skipped or failed during item processing.
+    required_properties:
+      - failure_reason
+      - surface
+      - trigger_source
+    optional_properties:
+      - import_source
+      - item_count_bucket
+    allowed_values:
+      failure_reason:
+        - validation_failed
+        - file_missing
+        - decode_error
+        - unsupported_state
+        - sdk_error
+        - unknown
+      surface:
+        - home
+        - photos
+        - gallery
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+      import_source:
+        - device_capture
+        - manual_retry
+        - unknown
+      item_count_bucket:
+        - "1"
+        - "2_5"
+        - "6_20"
+        - "21_100"
+        - "100_plus"
+        - unknown
+    privacy_notes: Use only approved low-cardinality failure_reason values. Do not include skipped file lists, raw transfer errors, BLE error codes, device address, exact file counts, media paths, or media content.
+    ga4_custom_definitions:
+      - failure_reason
+      - surface
+      - trigger_source
+      - import_source
+      - item_count_bucket
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - media_import_opportunity_funnel
+      - media_import_quality_breakdown
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Simulate a partially successful import with one skipped or failed item; confirm media_import_degraded appears once for the batch.
+      - Confirm media_import_degraded is not double-counted as media_import_failed for the same batch when the batch remains usable.
+      - Confirm no skipped file list, raw error, exact file count, media path, or media content is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Simulate a partially successful import; confirm media_import_degraded appears with platform=ios and an approved failure_reason.
+      - Confirm no skipped file list, raw error, exact file count, media path, or media content is present.
+
+  - event_name: media_import_failed
+    goal: Identify media import failure reasons when the import flow cannot produce a usable completed batch.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Import flow starts but ends in a failure state, such as MediaSyncState.Error, an unrecoverable transfer/store failure, or an empty result with zero successfully inserted items.
+    trigger_ios: Import flow starts but ends in a failure state that prevents the batch from being usable.
+    required_properties:
+      - failure_reason
+      - surface
+    optional_properties:
+      - import_source
+      - entry_point
+      - item_count_bucket
+    allowed_values:
+      failure_reason:
+        - network_error
+        - permission_denied
+        - timeout
+        - unsupported_state
+        - sdk_error
+        - unknown
+      surface:
+        - home
+        - media_library
+        - photos
+        - gallery
+        - unknown
+      import_source:
+        - device_capture
+        - manual_retry
+        - unknown
+      entry_point:
+        - home
+        - photos
+        - device
+        - notification
+        - unknown
+      item_count_bucket:
+        - "1"
+        - "2_5"
+        - "6_20"
+        - "21_100"
+        - "100_plus"
+        - unknown
+    privacy_notes: |
+      Map MediaSyncState.Error subtypes to approved failure_reason values:
+      ChannelUnavailable / BatteryLow / CantSyncWhen[Calling|Ota|Factory|Charging] / Busy -> unsupported_state;
+      Other -> sdk_error;
+      WiFi / location permission after start -> permission_denied;
+      network errors -> network_error;
+      download timeout -> timeout.
+      Do not include file lists, raw transfer errors, BLE error codes, exact file counts, or device address.
+      If a started Android import produces zero successful items without a more specific SDK/download error, use unknown.
+    ga4_custom_definitions:
+      - failure_reason
+      - surface
+      - import_source
+      - entry_point
+      - item_count_bucket
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - media_import_opportunity_funnel
+      - media_import_failure_breakdown
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Simulate channel unavailable, low battery, and download timeout after the import starts; confirm media_import_failed appears with the correctly mapped failure_reason for each scenario.
+      - Simulate a started import that produces zero successful items and no more specific SDK/download error; confirm media_import_failed appears with failure_reason=unknown.
+      - Confirm pre-start permission/device-state blocks use media_import_blocked instead of media_import_failed.
+      - Confirm no file lists, raw transfer errors, BLE error codes, exact file counts, or device address is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Simulate import failure scenarios after the import starts and confirm media_import_failed appears with approved failure_reason values and platform=ios.
+      - Confirm no file lists, raw transfer errors, exact file counts, or device address is present.
+
+  - event_name: media_import_blocked
+    goal: Measure media import opportunities that cannot start because a pre-start permission, connectivity, or device-state gate blocks the flow.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User attempts to start import or the app evaluates an import-ready opportunity, but the flow is blocked before MediaSyncService.startImport() begins due to permission, BLE/device state, Wi-Fi/location availability, OTA, call, charging, factory, busy, or equivalent pre-start gate.
+    trigger_ios: User attempts to start import or the app evaluates an import-ready opportunity, but the flow is blocked before the import starts due to permission, connectivity, or device-state gates.
+    required_properties:
+      - failure_reason
+      - surface
+    optional_properties:
+      - entry_point
+      - import_source
+      - item_count_bucket
+    allowed_values:
+      failure_reason:
+        - permission_denied
+        - network_error
+        - unsupported_state
+        - sdk_error
+        - unknown
+      surface:
+        - home
+        - photos
+        - gallery
+        - unknown
+      entry_point:
+        - home
+        - photos
+        - device
+        - notification
+        - unknown
+      import_source:
+        - device_capture
+        - manual_retry
+        - unknown
+      item_count_bucket:
+        - "1"
+        - "2_5"
+        - "6_20"
+        - "21_100"
+        - "100_plus"
+        - unknown
+    privacy_notes: Use only approved failure_reason values. Do not include raw permission names beyond approved enums, Wi-Fi SSID/BSSID, BLE address, device address, file lists, or exact file counts.
+    ga4_custom_definitions:
+      - failure_reason
+      - surface
+      - entry_point
+      - import_source
+      - item_count_bucket
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - media_import_opportunity_funnel
+      - media_import_blocked_breakdown
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Deny Wi-Fi/location permission before tapping import; confirm media_import_blocked with failure_reason=permission_denied and no media_import_started for the same attempt.
+      - Simulate device busy or unsupported device state before import starts; confirm media_import_blocked with failure_reason=unsupported_state.
+      - Confirm no raw permission names, SSID/BSSID, BLE address, file lists, or exact file counts are present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Simulate pre-start permission and device-state blocks; confirm media_import_blocked appears with approved failure_reason values and platform=ios.
+      - Confirm no raw permission names, network identifiers, device address, file lists, or exact file counts are present.
+
+  - event_name: media_import_cancelled
+    goal: Distinguish user-initiated cancellation from system-side import failures.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User explicitly cancels an in-progress import after the import has started and before a terminal completed, degraded, or failed result is emitted.
+    trigger_ios: User explicitly cancels an in-progress import while it is in progress.
+    required_properties:
+      - surface
+      - trigger_source
+    optional_properties:
+      - entry_point
+      - import_source
+      - item_count_bucket
+    allowed_values:
+      surface:
+        - home
+        - photos
+        - gallery
+        - unknown
+      trigger_source:
+        - user
+        - unknown
+      entry_point:
+        - home
+        - photos
+        - device
+        - notification
+        - unknown
+      import_source:
+        - device_capture
+        - manual_retry
+        - unknown
+      item_count_bucket:
+        - "1"
+        - "2_5"
+        - "6_20"
+        - "21_100"
+        - "100_plus"
+        - unknown
+    privacy_notes: Do not include file lists, partial download counts, exact file counts, or media path.
+    ga4_custom_definitions:
+      - surface
+      - trigger_source
+      - entry_point
+      - import_source
+      - item_count_bucket
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - media_import_opportunity_funnel
+      - media_import_cancellation_rate
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Start an import, then explicitly cancel mid-flight; confirm media_import_cancelled appears once with platform=android and trigger_source=user.
+      - Confirm media_import_failed does not also fire for the same controlled cancellation.
+      - Confirm no file lists, partial download counts, exact file counts, or media path is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Cancel an in-progress import; confirm media_import_cancelled appears with platform=ios.
+      - Confirm media_import_failed does not also fire for the same controlled cancellation.
+      - Confirm no file lists, partial download counts, exact file counts, or media path is present.
+
+  # Browse / Select / Delete / Share
+
+  - event_name: media_library_viewed
+    goal: Measure entry volume into the media library list.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User enters the Photos/media library list surface. Do not fire this event for media detail pages.
+    trigger_ios: User enters the Photos/media library list surface. Do not fire this event for media detail pages.
+    required_properties:
+      - entry_point
+      - surface
+    optional_properties:
+      - trigger_source
+    allowed_values:
+      entry_point:
+        - home
+        - photos
+        - notification
+        - deep_link
+        - unknown
+      surface:
+        - photos
+        - gallery
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+    privacy_notes: Do not include media thumbnails, titles, file names, media paths, or exact item count.
+    ga4_custom_definitions:
+      - entry_point
+      - surface
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - media_library_entry
+      - media_browse_funnel
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Open the Photos list from Home; confirm media_library_viewed appears once for the list surface with platform=android.
+      - Open a media detail page; confirm media_library_viewed is not fired for the detail page.
+      - Confirm no thumbnails, titles, file names, media paths, or exact item count is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Open the Photos list; confirm media_library_viewed appears with platform=ios and is not reused for media detail pages.
+      - Confirm no thumbnails, titles, file names, media paths, or exact item count is present.
+
+  - event_name: media_detail_viewed
+    goal: Measure entry volume into single media detail pages and split image, video, and audio detail reach.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User opens a single media detail page, such as the gallery pager/detail surface.
+    trigger_ios: User opens a single media detail page.
+    required_properties:
+      - entry_point
+      - surface
+      - media_type
+    optional_properties:
+      - trigger_source
+    allowed_values:
+      entry_point:
+        - photos
+        - gallery
+        - notification
+        - deep_link
+        - unknown
+      surface:
+        - detail
+        - gallery
+        - unknown
+      media_type:
+        - image
+        - video
+        - audio
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+    privacy_notes: media_type must be a stable low-cardinality enum. Do not include thumbnails, titles, file names, media paths, media content, EXIF data, raw capture time, or exact item position.
+    ga4_custom_definitions:
+      - entry_point
+      - surface
+      - media_type
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - media_browse_funnel
+      - media_detail_type_breakdown
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Open image and video detail pages; confirm media_detail_viewed appears with media_type=image or media_type=video.
+      - Confirm media_library_viewed is not fired for the same detail view.
+      - Confirm no thumbnails, titles, file names, media paths, media content, EXIF, raw capture time, or exact item position is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Open image and video detail pages; confirm media_detail_viewed appears with platform=ios and the approved media_type values.
+      - Confirm no thumbnails, titles, file names, media paths, media content, EXIF, raw capture time, or exact item position is present.
+
+  - event_name: media_share_started
+    goal: Measure entry volume into the formal media share flow.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User initiates a share from a detail page or batch selection before the app prepares share targets.
+    trigger_ios: User initiates a share from a detail page or batch selection before the app prepares share targets.
+    required_properties:
+      - surface
+      - trigger_source
+      - selection_scope
+    optional_properties:
+      - entry_point
+      - media_type
+    allowed_values:
+      surface:
+        - photos
+        - gallery
+        - detail
+        - unknown
+      trigger_source:
+        - user
+        - unknown
+      selection_scope:
+        - single
+        - batch
+        - unknown
+      entry_point:
+        - photos
+        - gallery
+        - detail
+        - unknown
+      media_type:
+        - image
+        - video
+        - audio
+        - mixed
+        - unknown
+    privacy_notes: Do not include file names, share targets, media paths, media content, thumbnails, or exact selection count.
+    ga4_custom_definitions:
+      - surface
+      - trigger_source
+      - selection_scope
+      - entry_point
+      - media_type
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - media_share_funnel
+      - media_share_selection_scope_breakdown
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Trigger share from a single detail page; confirm media_share_started with selection_scope=single.
+      - Trigger share from a batch selection; confirm media_share_started with selection_scope=batch.
+      - Confirm no file names, share targets, media paths, media content, thumbnails, or exact selection count is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Trigger single and batch share flows; confirm media_share_started with the correct selection_scope and platform=ios.
+      - Confirm no file names, share targets, media paths, media content, thumbnails, or exact selection count is present.
+
+  - event_name: media_share_sheet_opened
+    goal: Measure share dispatch reliability up to the point where the system share UI opens; this does not mean the user actually completed sharing in the target app.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: The app successfully prepares share targets and dispatches the Android share intent/system Sharesheet without local error.
+    trigger_ios: The app successfully prepares share items and presents UIActivityViewController without local error.
+    required_properties:
+      - surface
+      - trigger_source
+      - selection_scope
+    optional_properties:
+      - entry_point
+      - media_type
+    allowed_values:
+      surface:
+        - photos
+        - gallery
+        - detail
+        - unknown
+      trigger_source:
+        - user
+        - unknown
+      selection_scope:
+        - single
+        - batch
+        - unknown
+      entry_point:
+        - photos
+        - gallery
+        - detail
+        - unknown
+      media_type:
+        - image
+        - video
+        - audio
+        - mixed
+        - unknown
+    privacy_notes: Do not treat this as third-party share success. Do not include selected share target, contact/email, file names, media paths, media content, thumbnails, or exact selection count.
+    ga4_custom_definitions:
+      - surface
+      - trigger_source
+      - selection_scope
+      - entry_point
+      - media_type
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - media_share_funnel
+      - media_share_sheet_open_rate
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Trigger share from a single detail and from a batch selection; confirm media_share_sheet_opened appears only after the system share UI opens.
+      - Cancel the system share sheet; confirm media_share_sheet_opened is still valid and no share completion event is emitted.
+      - Confirm no selected share target, contact/email, file names, media paths, media content, thumbnails, or exact selection count is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Present UIActivityViewController; confirm media_share_sheet_opened appears with platform=ios.
+      - Cancel the activity view; confirm no share completion event is expected.
+      - Confirm no selected share target, contact/email, file names, media paths, media content, thumbnails, or exact selection count is present.
+
+  - event_name: media_delete_started
+    goal: Measure entry volume into the formal media delete flow.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User initiates a delete from detail or batch selection before the app calls the delete API.
+    trigger_ios: User initiates a delete from detail or batch selection before the app calls the delete API.
+    required_properties:
+      - surface
+      - trigger_source
+      - selection_scope
+    optional_properties:
+      - entry_point
+      - media_type
+    allowed_values:
+      surface:
+        - photos
+        - gallery
+        - detail
+        - unknown
+      trigger_source:
+        - user
+        - unknown
+      selection_scope:
+        - single
+        - batch
+        - unknown
+      entry_point:
+        - photos
+        - gallery
+        - detail
+        - unknown
+      media_type:
+        - image
+        - video
+        - audio
+        - mixed
+        - unknown
+    privacy_notes: selection_scope represents single vs batch delete. Do not include file names, media content, media paths, thumbnails, or exact selection count.
+    ga4_custom_definitions:
+      - surface
+      - trigger_source
+      - selection_scope
+      - entry_point
+      - media_type
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - media_delete_funnel
+      - media_delete_scope_breakdown
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Trigger delete from a single detail page; confirm media_delete_started with selection_scope=single.
+      - Trigger delete from a batch selection; confirm media_delete_started with selection_scope=batch.
+      - Confirm no file names, media content, media paths, thumbnails, or exact selection count is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Trigger single and batch delete flows; confirm media_delete_started with the correct selection_scope and platform=ios.
+      - Confirm no file names, media content, media paths, thumbnails, or exact selection count is present.
+
+  - event_name: media_delete_completed
+    goal: Measure media delete completion rate.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Delete action completes only after the delete API returns success, such as UniMediaStore.delete returning true. Do not emit from optimistic UI state before the delete result is known.
+    trigger_ios: Delete action completes only after the delete API returns success. Do not emit from optimistic UI state before the delete result is known.
+    required_properties:
+      - surface
+      - trigger_source
+      - selection_scope
+    optional_properties:
+      - entry_point
+      - media_type
+    allowed_values:
+      surface:
+        - photos
+        - gallery
+        - detail
+        - unknown
+      trigger_source:
+        - user
+        - unknown
+      selection_scope:
+        - single
+        - batch
+        - unknown
+      entry_point:
+        - photos
+        - gallery
+        - detail
+        - unknown
+      media_type:
+        - image
+        - video
+        - audio
+        - mixed
+        - unknown
+    privacy_notes: Do not include file names, deleted media content, media paths, thumbnails, or exact selection count.
+    ga4_custom_definitions:
+      - surface
+      - trigger_source
+      - selection_scope
+      - entry_point
+      - media_type
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - media_delete_funnel
+      - media_delete_success_rate
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Complete a delete action and confirm media_delete_completed appears only after the delete API returns success.
+      - Force a delete failure and confirm media_delete_completed is not emitted for the failed attempt.
+      - Confirm no file names, deleted media content, media paths, thumbnails, or exact selection count is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Complete a delete action and confirm media_delete_completed appears only after the delete API returns success.
+      - Confirm no file names, deleted media content, media paths, thumbnails, or exact selection count is present.
+
+  - event_name: media_action_failed
+    goal: Identify delete or share failure scale and reasons using a unified failure event for non-import media actions.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: A delete or share action fails before completing locally, such as UniMediaStore.delete returning false, share target preparation failing, or the app failing to dispatch the system share UI.
+    trigger_ios: A delete or share action fails before completing locally.
+    required_properties:
+      - failure_reason
+      - surface
+      - action_type
+    optional_properties:
+      - entry_point
+      - selection_scope
+      - media_type
+    allowed_values:
+      failure_reason:
+        - network_error
+        - permission_denied
+        - validation_failed
+        - timeout
+        - unsupported_state
+        - file_missing
+        - sdk_error
+        - unknown
+      surface:
+        - photos
+        - gallery
+        - detail
+        - unknown
+      action_type:
+        - delete
+        - share
+        - unknown
+      entry_point:
+        - photos
+        - gallery
+        - detail
+        - unknown
+      selection_scope:
+        - single
+        - batch
+        - unknown
+      media_type:
+        - image
+        - video
+        - audio
+        - mixed
+        - unknown
+    privacy_notes: action_type, selection_scope, and media_type must be stable enums. Do not include media path, system share error details, file names, raw error messages, thumbnails, or exact selection count.
+    ga4_custom_definitions:
+      - failure_reason
+      - surface
+      - action_type
+      - entry_point
+      - selection_scope
+      - media_type
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - media_action_failure_breakdown
+      - media_share_funnel
+      - media_delete_funnel
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Simulate a delete failure; confirm media_action_failed with action_type=delete and an approved failure_reason.
+      - Simulate a share preparation or share dispatch failure; confirm media_action_failed with action_type=share.
+      - Confirm no media path, system share error details, file names, raw error messages, thumbnails, or exact selection count is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Simulate delete and share failures; confirm media_action_failed with the correct action_type and failure_reason and platform=ios.
+      - Confirm no media path, system share error details, file names, raw error messages, thumbnails, or exact selection count is present.
+
+  # Video Playback
+
+  - event_name: media_playback_started
+    goal: Measure successful start of video playback from a media detail page.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User opens a video media detail page and the player reaches a real playback-started state, such as first frame rendered or playback state ready and playing.
+    trigger_ios: User opens a video media detail page and the player reaches a real playback-started state.
+    required_properties:
+      - surface
+      - media_type
+    optional_properties:
+      - entry_point
+      - trigger_source
+      - playback_source
+    allowed_values:
+      surface:
+        - detail
+        - gallery
+        - unknown
+      media_type:
+        - video
+      entry_point:
+        - photos
+        - gallery
+        - detail
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+      playback_source:
+        - local_file
+        - cached_file
+        - unknown
+    privacy_notes: This event is for video only. Do not include video title, file name, media path, playback progress, raw duration, thumbnails, media content, EXIF data, or raw player state.
+    ga4_custom_definitions:
+      - surface
+      - media_type
+      - entry_point
+      - trigger_source
+      - playback_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - media_playback_start_rate
+      - media_detail_type_breakdown
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Open a video detail page and start playback; confirm media_playback_started appears after the player actually starts playback.
+      - Open an image detail page; confirm media_playback_started is not emitted.
+      - Confirm no title, file name, media path, playback progress, raw duration, thumbnail, media content, EXIF, or raw player state is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Open a video detail page and start playback; confirm media_playback_started appears with platform=ios.
+      - Confirm no title, file name, media path, playback progress, raw duration, thumbnail, media content, EXIF, or raw player state is present.
+
+  - event_name: media_playback_failed
+    goal: Identify why video playback cannot start from a media detail page.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User attempts to play a video media detail item, but playback cannot start because of missing file, decode failure, unsupported format, permission, timeout, or player SDK failure.
+    trigger_ios: User attempts to play a video media detail item, but playback cannot start.
+    required_properties:
+      - failure_reason
+      - surface
+      - media_type
+    optional_properties:
+      - entry_point
+      - trigger_source
+      - playback_source
+    allowed_values:
+      failure_reason:
+        - file_missing
+        - decode_error
+        - unsupported_format
+        - permission_denied
+        - timeout
+        - sdk_error
+        - unknown
+      surface:
+        - detail
+        - gallery
+        - unknown
+      media_type:
+        - video
+      entry_point:
+        - photos
+        - gallery
+        - detail
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+      playback_source:
+        - local_file
+        - cached_file
+        - unknown
+    privacy_notes: Do not include video title, file name, media path, playback progress, raw duration, thumbnails, media content, raw exception, raw player state, or stack trace.
+    ga4_custom_definitions:
+      - failure_reason
+      - surface
+      - media_type
+      - entry_point
+      - trigger_source
+      - playback_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - media_playback_failure_breakdown
+      - media_playback_start_rate
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Simulate missing local file, decode failure, and unsupported video format; confirm media_playback_failed appears with approved failure_reason values.
+      - Confirm media_playback_started is not emitted for the same failed playback attempt.
+      - Confirm no title, file name, media path, playback progress, raw duration, thumbnail, media content, raw exception, raw player state, or stack trace is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Simulate video playback failures; confirm media_playback_failed appears with platform=ios and approved failure_reason values.
+      - Confirm no title, file name, media path, playback progress, raw duration, thumbnail, media content, raw exception, raw player state, or stack trace is present.
+
+  # Auto Horizon Correction
+
+  - event_name: media_horizon_viewed
+    goal: Measure user reach to horizon correction details or rule explanation.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User opens an image detail that has horizon correction available, such as an image with deskewInfo populated.
+    trigger_ios: User opens an image detail that has horizon correction available.
+    required_properties:
+      - entry_point
+      - surface
+    optional_properties:
+      - trigger_source
+      - media_type
+    allowed_values:
+      entry_point:
+        - photos
+        - gallery
+        - detail
+        - unknown
+      surface:
+        - detail
+        - gallery
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+      media_type:
+        - image
+        - unknown
+    privacy_notes: Do not include image content, image dimensions, correction parameters, file names, media paths, or EXIF data.
+    ga4_custom_definitions:
+      - entry_point
+      - surface
+      - trigger_source
+      - media_type
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - media_horizon_reach
+      - media_browse_funnel
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Open an image detail with horizon correction available; confirm media_horizon_viewed appears once with platform=android.
+      - Confirm no image content, dimensions, correction parameters, file names, media paths, or EXIF data are present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Open an image detail with horizon correction; confirm media_horizon_viewed appears with platform=ios.
+      - Confirm no image content, dimensions, correction parameters, file names, media paths, or EXIF data are present.
+
+  - event_name: media_horizon_toggled
+    goal: Measure usage of the horizon correction on/off toggle.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User toggles the horizon correction switch and the app renders the visible result.
+    trigger_ios: User toggles the horizon correction switch and the app renders the visible result.
+    required_properties:
+      - surface
+      - trigger_source
+    optional_properties:
+      - entry_point
+      - toggle_state
+      - media_type
+    allowed_values:
+      surface:
+        - detail
+        - gallery
+        - unknown
+      trigger_source:
+        - user
+        - unknown
+      entry_point:
+        - photos
+        - gallery
+        - detail
+        - unknown
+      toggle_state:
+        - "on"
+        - "off"
+        - unknown
+      media_type:
+        - image
+        - unknown
+    privacy_notes: toggle_state records on/off only. Do not include image content, correction parameters, output paths, file names, media paths, or EXIF data.
+    ga4_custom_definitions:
+      - surface
+      - trigger_source
+      - entry_point
+      - toggle_state
+      - media_type
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - media_horizon_toggle_usage
+      - media_horizon_state_split
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Toggle horizon correction on and confirm media_horizon_toggled with toggle_state=on.
+      - Toggle horizon correction off and confirm media_horizon_toggled with toggle_state=off.
+      - Confirm no image content, correction parameters, output paths, file names, media paths, or EXIF data are present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Toggle horizon correction on and off; confirm media_horizon_toggled with the correct toggle_state and platform=ios.
+      - Confirm no image content, correction parameters, output paths, file names, media paths, or EXIF data are present.
+
+  - event_name: media_horizon_export_failed
+    goal: Identify horizon correction export failure scale.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Detail or share path fails to output a horizon-corrected result and the app cannot safely fall back without user-visible degradation.
+    trigger_ios: Detail or share path fails to output a horizon-corrected result and the app cannot safely fall back without user-visible degradation.
+    required_properties:
+      - failure_reason
+      - surface
+    optional_properties:
+      - entry_point
+      - media_type
+    allowed_values:
+      failure_reason:
+        - sdk_error
+        - validation_failed
+        - timeout
+        - permission_denied
+        - unsupported_state
+        - unknown
+      surface:
+        - detail
+        - gallery
+        - unknown
+      entry_point:
+        - photos
+        - gallery
+        - detail
+        - unknown
+      media_type:
+        - image
+        - unknown
+    privacy_notes: Do not include image content, output paths, file names, media paths, raw error messages, correction parameters, or EXIF data.
+    ga4_custom_definitions:
+      - failure_reason
+      - surface
+      - entry_point
+      - media_type
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - media_horizon_export_failure
+      - media_share_funnel
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Simulate a horizon correction export failure that cannot safely fall back; confirm media_horizon_export_failed with an approved failure_reason.
+      - Confirm no image content, output paths, file names, media paths, raw error messages, correction parameters, or EXIF data are present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Simulate a horizon correction export failure; confirm media_horizon_export_failed with an approved failure_reason and platform=ios.
+      - Confirm no image content, output paths, file names, media paths, raw error messages, correction parameters, or EXIF data are present.
+
+  # Image Enhancement
+
+  - event_name: media_enhance_toggled
+    goal: Measure usage of the image enhancement on/off toggle when the current build actually exposes this control.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User toggles the image enhancement switch and a visible result is rendered. Emit only in builds or configurations where the enhancement control is actually visible.
+    trigger_ios: User toggles the image enhancement switch and a visible result is rendered. Emit only in builds or configurations where the enhancement control is actually visible.
+    required_properties:
+      - surface
+      - trigger_source
+    optional_properties:
+      - entry_point
+      - toggle_state
+      - media_type
+    allowed_values:
+      surface:
+        - detail
+        - gallery
+        - unknown
+      trigger_source:
+        - user
+        - unknown
+      entry_point:
+        - photos
+        - gallery
+        - detail
+        - unknown
+      toggle_state:
+        - "on"
+        - "off"
+        - unknown
+      media_type:
+        - image
+        - unknown
+    privacy_notes: toggle_state records on/off only. Do not include image content, LUT parameters, color profile data, output paths, file names, media paths, or EXIF data.
+    ga4_custom_definitions:
+      - surface
+      - trigger_source
+      - entry_point
+      - toggle_state
+      - media_type
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - media_enhance_toggle_usage
+      - media_enhance_state_split
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - In a build/configuration where the enhancement control is visible, toggle image enhancement on and confirm media_enhance_toggled with toggle_state=on.
+      - Toggle image enhancement off and confirm media_enhance_toggled with toggle_state=off.
+      - In a build/configuration where the enhancement control is hidden, confirm media_enhance_toggled is not emitted.
+      - Confirm no image content, LUT parameters, color profile data, output paths, file names, media paths, or EXIF data are present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - In a build/configuration where the enhancement control is visible, toggle image enhancement on and off; confirm media_enhance_toggled with the correct toggle_state and platform=ios.
+      - Confirm no image content, LUT parameters, color profile data, output paths, file names, media paths, or EXIF data are present.

@@ -1,0 +1,550 @@
+schema_version: 2
+owner: translation
+platforms:
+  - android
+  - ios
+common_properties:
+  injected_by_adapter:
+    - platform
+    - environment
+    - build_region
+    - build_type
+    - app_version_name
+    - app_version_code
+  definitions:
+    platform: Lowercase client platform, such as android or ios.
+    environment: Analytics environment, test or prod.
+    build_region: Analytics build region. Current Android rule is prod -> us, test -> sg.
+    build_type: Client build type such as debug or release.
+    app_version_name: Public app version name injected by the client adapter.
+    app_version_code: Numeric app version code injected by the client adapter.
+implementation_contract:
+  android_contract_layer: "domain:api:analytics"
+  android_tracker: "AnalyticsTracker"
+  android_event_type: "AnalyticsEvent"
+  android_event_spec_type: "AnalyticsEventSpec"
+  android_provider_adapter: "Ga4AnalyticsAdapter"
+  android_direct_sdk_boundary: "Only the app-level provider adapter may call FirebaseAnalytics. Business, feature, domain, and data code must use typed reporters or AnalyticsTracker."
+  ios_contract_layer: "iOS analytics facade matching this schema"
+  ios_provider_adapter: "GA4/Firebase adapter behind the iOS facade"
+  ios_direct_sdk_boundary: "Only the iOS provider adapter may call Firebase Analytics.logEvent. Business code must use the facade."
+  required_tests:
+    - ga4_event_name_rules
+    - ga4_param_name_rules
+    - ga4_param_count_limit
+    - reserved_prefix_guardrails
+    - privacy_field_guardrails
+    - reporter_output_contract
+events:
+  - event_name: translation_entry_viewed
+    goal: Measure entry volume into the Translation configuration page.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User enters the Translation configuration page and sees mode, language, and start controls. Emit once per screen presentation.
+    trigger_ios: User enters the Translation configuration page and sees mode, language, and start controls. Emit once per screen presentation.
+    required_properties:
+      - entry_point
+      - surface
+    optional_properties:
+      - trigger_source
+    allowed_values:
+      entry_point:
+        - home_translate_card
+        - home_translating_status
+        - glasses_shortcut
+        - voice_command
+        - unknown
+      surface:
+        - translation_config
+        - home
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - device
+        - voice_command
+        - unknown
+    privacy_notes: Do not include draft configuration, free text, raw route parameters, or localized page copy.
+    ga4_custom_definitions:
+      - entry_point
+      - surface
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - translation_entry_funnel
+      - translation_config_usage
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Enter Translation from Home and shortcuts and confirm translation_entry_viewed fires once per screen presentation with approved enum values.
+      - Confirm no draft configuration, free text, raw route parameters, or localized page copy is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Enter Translation from Home and shortcuts and confirm translation_entry_viewed uses the same event name, params, and enum values as Android.
+      - Confirm no draft configuration, free text, raw route parameters, or localized page copy is present.
+
+  - event_name: translation_mode_selected
+    goal: Measure effective user selection between Conversation and Listening modes.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User actively switches Translation mode and the new mode becomes effective.
+    trigger_ios: User actively switches Translation mode and the new mode becomes effective.
+    required_properties:
+      - mode
+      - surface
+    optional_properties:
+      - entry_point
+    allowed_values:
+      mode:
+        - conversation
+        - listening
+        - unknown
+      surface:
+        - translation_config
+        - unknown
+      entry_point:
+        - home_translate_card
+        - home_translating_status
+        - glasses_shortcut
+        - voice_command
+        - unknown
+    privacy_notes: Do not include visible copy, draft text, or local configuration payloads.
+    ga4_custom_definitions:
+      - mode
+      - surface
+      - entry_point
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - translation_mode_distribution
+      - translation_config_usage
+    verification_android:
+      - Switch between Conversation and Listening on Android and confirm translation_mode_selected fires only after the mode is applied.
+      - Confirm no visible copy, draft text, or local configuration payload is present.
+    verification_ios:
+      - Switch between Conversation and Listening on iOS and confirm the same event name, params, and enum values as Android.
+      - Confirm no visible copy, draft text, or local configuration payload is present.
+
+  - event_name: translation_language_selected
+    goal: Measure confirmed language selection behavior for each language role.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User confirms a new language on the language page and the selection is written back to the current Translation configuration.
+    trigger_ios: User confirms a new language on the language page and the selection is written back to the current Translation configuration.
+    required_properties:
+      - language_role
+      - mode
+      - surface
+    optional_properties:
+      - language_code
+      - selection_method
+    allowed_values:
+      language_role:
+        - your_language
+        - their_language
+        - unknown
+      mode:
+        - conversation
+        - listening
+        - unknown
+      surface:
+        - translation_language
+        - translation_config
+        - unknown
+      selection_method:
+        - grouped_list
+        - search
+        - recent
+        - memory
+        - unknown
+    privacy_notes: language_code must be a stable code. Do not include search text, local drafts, visible language labels, or raw locale strings.
+    ga4_custom_definitions:
+      - language_role
+      - mode
+      - surface
+      - language_code
+      - selection_method
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - translation_language_selection
+      - translation_mode_distribution
+    verification_android:
+      - Select languages through grouped list and search on Android and confirm translation_language_selected fires after confirmation.
+      - Confirm language_code is a stable code and no search text, label text, local drafts, or raw locale is present.
+    verification_ios:
+      - Select languages through grouped list and search on iOS and confirm the same event name, params, and enum values as Android.
+      - Confirm language_code is a stable code and no search text, label text, local drafts, or raw locale is present.
+
+  - event_name: translation_session_started
+    goal: Measure successful entry into a formal Translation session.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Client receives session_ready and the Translation session moves from loading into active in-session state.
+    trigger_ios: Client receives session_ready and the Translation session moves from loading into active in-session state.
+    required_properties:
+      - mode
+      - entry_point
+      - surface
+    optional_properties:
+      - recognition_policy
+    allowed_values:
+      mode:
+        - conversation
+        - listening
+        - unknown
+      entry_point:
+        - home_translate_card
+        - home_translating_status
+        - glasses_shortcut
+        - voice_command
+        - unknown
+      surface:
+        - translation_session
+        - translation_config
+        - unknown
+      recognition_policy:
+        - glasses_audio
+        - unknown
+    privacy_notes: Do not include raw audio, transcript text, RTC token, channel name, protocol payload, or free text.
+    ga4_custom_definitions:
+      - mode
+      - entry_point
+      - surface
+      - recognition_policy
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - translation_session_funnel
+      - translation_entry_funnel
+    verification_android:
+      - Start Translation on Android and confirm translation_session_started fires only after session_ready.
+      - Confirm no raw audio, transcript text, RTC token, channel name, protocol payload, or free text is present.
+    verification_ios:
+      - Start Translation on iOS and confirm translation_session_started fires only after session_ready with the same params and enum values as Android.
+      - Confirm no raw audio, transcript text, RTC token, channel name, protocol payload, or free text is present.
+
+  - event_name: translation_blocked
+    goal: Measure pre-session blocks before a formal Translation session can start.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User starts Translation or a shortcut opens Translation, but a precondition blocks entry before session_ready.
+    trigger_ios: User starts Translation or a shortcut opens Translation, but a precondition blocks entry before session_ready.
+    required_properties:
+      - block_reason
+      - mode
+      - surface
+    optional_properties:
+      - entry_point
+    allowed_values:
+      block_reason:
+        - their_language_missing
+        - same_language_pair
+        - saved_config_missing
+        - glasses_not_connected
+        - credits_used_up
+        - unknown
+      mode:
+        - conversation
+        - listening
+        - unknown
+      surface:
+        - translation_config
+        - home
+        - unknown
+      entry_point:
+        - home_translate_card
+        - home_translating_status
+        - glasses_shortcut
+        - voice_command
+        - unknown
+    privacy_notes: block_reason must be a stable enum. Do not include permission dialog text, raw system errors, credentials, or account details. Credit prompts use global membership/credits events.
+    ga4_custom_definitions:
+      - block_reason
+      - mode
+      - surface
+      - entry_point
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - translation_block_reason_breakdown
+      - translation_entry_funnel
+    verification_android:
+      - Simulate missing target language, same language pair, missing saved config, disconnected glasses, and credits used up on Android.
+      - Confirm translation_blocked fires without translation_session_started for the same blocked attempt.
+      - Confirm no permission dialog text, raw system error, credentials, or account details are present.
+    verification_ios:
+      - Simulate the same block reasons on iOS and confirm the same event name, params, and enum values as Android.
+      - Confirm translation_blocked fires without translation_session_started for the same blocked attempt.
+      - Confirm no permission dialog text, raw system error, credentials, or account details are present.
+
+  - event_name: translation_session_completed
+    goal: Measure normal Translation session completion and result availability.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: A session that reached session_ready receives session_end and ends with user-visible results or a normal terminal state.
+    trigger_ios: A session that reached session_ready receives session_end and ends with user-visible results or a normal terminal state.
+    required_properties:
+      - mode
+      - session_end_reason
+      - surface
+    optional_properties:
+      - entry_point
+      - had_results
+    allowed_values:
+      mode:
+        - conversation
+        - listening
+        - unknown
+      session_end_reason:
+        - session_end
+        - user_ended
+        - credits_exhausted
+        - unknown
+      surface:
+        - translation_session
+        - unknown
+      entry_point:
+        - home_translate_card
+        - home_translating_status
+        - glasses_shortcut
+        - voice_command
+        - unknown
+      had_results:
+        - true
+        - false
+    privacy_notes: Do not include source text, translated text, transcript text, paragraph content, history body, or server error text.
+    ga4_custom_definitions:
+      - mode
+      - session_end_reason
+      - surface
+      - entry_point
+      - had_results
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - translation_session_funnel
+      - translation_completion_rate
+    verification_android:
+      - Complete Conversation and Listening sessions on Android and confirm translation_session_completed fires after session_end.
+      - Confirm credits_exhausted is used only as a stable terminal reason and no content text is present.
+    verification_ios:
+      - Complete Conversation and Listening sessions on iOS and confirm the same event name, params, and enum values as Android.
+      - Confirm credits_exhausted is used only as a stable terminal reason and no content text is present.
+
+  - event_name: translation_session_failed
+    goal: Measure Translation session failures before or after session_ready.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Session loading fails before active state or an active Translation session ends through an unrecoverable error.
+    trigger_ios: Session loading fails before active state or an active Translation session ends through an unrecoverable error.
+    required_properties:
+      - failure_reason
+      - mode
+      - surface
+    optional_properties:
+      - error_scope
+      - recoverable
+      - entry_point
+    allowed_values:
+      failure_reason:
+        - session_init_failed
+        - session_ready_timeout
+        - session_config_invalid
+        - session_already_ended
+        - session_idle_timeout
+        - paragraph_asr_failed
+        - paragraph_out_of_order
+        - paragraph_invalid_state
+        - translation_failed
+        - target_language_unsupported
+        - language_detection_failed
+        - rtc_join_failed
+        - network_error
+        - unknown
+      mode:
+        - conversation
+        - listening
+        - unknown
+      surface:
+        - translation_session
+        - translation_config
+        - unknown
+      error_scope:
+        - loading
+        - session
+        - paragraph
+        - rtc
+        - datastream
+        - network
+        - unknown
+      recoverable:
+        - true
+        - false
+      entry_point:
+        - home_translate_card
+        - home_translating_status
+        - glasses_shortcut
+        - voice_command
+        - unknown
+    privacy_notes: Map errors to stable enums. Do not include raw error stacks, protocol payloads, request ids, response bodies, transcript text, source text, translated text, or audio.
+    ga4_custom_definitions:
+      - failure_reason
+      - mode
+      - surface
+      - error_scope
+      - recoverable
+      - entry_point
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - translation_session_funnel
+      - translation_failure_breakdown
+    verification_android:
+      - Simulate session init failure, session_ready timeout, RTC join failure, network error, and translation failure on Android.
+      - Confirm failed attempts do not also emit translation_session_completed.
+      - Confirm no raw error, request id, response body, protocol payload, transcript text, source text, translated text, or audio is present.
+    verification_ios:
+      - Simulate the same failure classes on iOS and confirm the same event name, params, and enum values as Android.
+      - Confirm failed attempts do not also emit translation_session_completed.
+      - Confirm no raw error, request id, response body, protocol payload, transcript text, source text, translated text, or audio is present.
+
+  - event_name: translation_history_viewed
+    goal: Measure Translation history list usage.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User enters the Translation History list page.
+    trigger_ios: User enters the Translation History list page.
+    required_properties:
+      - entry_point
+      - surface
+    optional_properties:
+      - has_history
+    allowed_values:
+      entry_point:
+        - translation_config
+        - translation_session
+        - home_translate_card
+        - unknown
+      surface:
+        - translation_history
+        - unknown
+      has_history:
+        - true
+        - false
+    privacy_notes: Do not include record ids, titles, preview text, history content, timestamps, or search text.
+    ga4_custom_definitions:
+      - entry_point
+      - surface
+      - has_history
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - translation_history_usage
+      - translation_history_empty_state
+    verification_android:
+      - Open Translation History on Android with empty and non-empty states and confirm translation_history_viewed uses approved values.
+      - Confirm no record ids, titles, preview text, history content, timestamps, or search text is present.
+    verification_ios:
+      - Open Translation History on iOS with empty and non-empty states and confirm the same event name, params, and enum values as Android.
+      - Confirm no record ids, titles, preview text, history content, timestamps, or search text is present.
+
+  - event_name: translation_history_opened
+    goal: Measure Translation history detail open rate.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User opens one Translation history record from the list.
+    trigger_ios: User opens one Translation history record from the list.
+    required_properties:
+      - surface
+      - record_mode
+    optional_properties:
+      - entry_point
+    allowed_values:
+      surface:
+        - translation_history
+        - translation_history_detail
+        - unknown
+      record_mode:
+        - conversation
+        - listening
+        - unknown
+      entry_point:
+        - translation_history
+        - unknown
+    privacy_notes: Do not include record id, title, preview text, transcript text, source text, translated text, timestamps, or history body.
+    ga4_custom_definitions:
+      - surface
+      - record_mode
+      - entry_point
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - translation_history_usage
+      - translation_history_detail_open_rate
+    verification_android:
+      - Open Conversation and Listening history records on Android and confirm translation_history_opened uses approved record_mode values.
+      - Confirm no record id, title, preview text, transcript text, source text, translated text, timestamps, or history body is present.
+    verification_ios:
+      - Open Conversation and Listening history records on iOS and confirm the same event name, params, and enum values as Android.
+      - Confirm no record id, title, preview text, transcript text, source text, translated text, timestamps, or history body is present.
+
+  - event_name: translation_history_deleted
+    goal: Measure user-confirmed Translation history deletion.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User confirms deletion for one or more Translation history records and the delete operation is accepted.
+    trigger_ios: User confirms deletion for one or more Translation history records and the delete operation is accepted.
+    required_properties:
+      - delete_mode
+      - surface
+    optional_properties:
+      - record_count_bucket
+      - record_mode
+    allowed_values:
+      delete_mode:
+        - single
+        - bulk
+        - unknown
+      surface:
+        - translation_history
+        - translation_history_detail
+        - unknown
+      record_count_bucket:
+        - one
+        - two_to_five
+        - six_to_twenty
+        - more_than_twenty
+        - unknown
+      record_mode:
+        - conversation
+        - listening
+        - mixed
+        - unknown
+    privacy_notes: Do not include deleted record ids, titles, transcript text, source text, translated text, timestamps, or history body.
+    ga4_custom_definitions:
+      - delete_mode
+      - surface
+      - record_count_bucket
+      - record_mode
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - translation_history_usage
+      - translation_history_deletion
+    verification_android:
+      - Delete one record and multiple records on Android and confirm translation_history_deleted fires after user confirmation and accepted deletion.
+      - Confirm no deleted record ids, titles, transcript text, source text, translated text, timestamps, or history body is present.
+    verification_ios:
+      - Delete one record and multiple records on iOS and confirm the same event name, params, and enum values as Android.
+      - Confirm no deleted record ids, titles, transcript text, source text, translated text, timestamps, or history body is present.

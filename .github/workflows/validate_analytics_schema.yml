@@ -1,0 +1,35 @@
+name: Validate Analytics Schema
+
+on:
+  pull_request:
+    paths:
+      - "analytics_schema/**"
+      - "tools/validate_analytics_schema.rb"
+      - "tests/validate_analytics_schema_test.rb"
+      - ".github/workflows/validate_analytics_schema.yml"
+  push:
+    branches:
+      - main
+    paths:
+      - "analytics_schema/**"
+      - "tools/validate_analytics_schema.rb"
+      - "tests/validate_analytics_schema_test.rb"
+      - ".github/workflows/validate_analytics_schema.yml"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Ruby
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2"
+
+      - name: Run schema validator tests
+        run: ruby tests/validate_analytics_schema_test.rb
+
+      - name: Validate analytics schema
+        run: ruby tools/validate_analytics_schema.rb

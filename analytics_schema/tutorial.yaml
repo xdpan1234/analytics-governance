@@ -1,0 +1,512 @@
+schema_version: 2
+owner: tutorial
+platforms:
+  - android
+  - ios
+common_properties:
+  injected_by_adapter:
+    - platform
+    - environment
+    - build_region
+    - build_type
+    - app_version_name
+    - app_version_code
+  definitions:
+    platform: Lowercase client platform, such as android or ios.
+    environment: Analytics environment, test or prod.
+    build_region: Analytics build region. Current Android rule is prod -> us, test -> sg.
+    build_type: Client build type such as debug or release.
+    app_version_name: Public app version name injected by the client adapter.
+    app_version_code: Numeric app version code injected by the client adapter.
+implementation_contract:
+  android_contract_layer: "domain:api:analytics"
+  android_tracker: "AnalyticsTracker"
+  android_event_type: "AnalyticsEvent"
+  android_event_spec_type: "AnalyticsEventSpec"
+  android_provider_adapter: "Ga4AnalyticsAdapter"
+  android_direct_sdk_boundary: "Only the app-level provider adapter may call FirebaseAnalytics. Business, feature, domain, and data code must use typed reporters or AnalyticsTracker."
+  ios_contract_layer: "iOS analytics facade matching this schema"
+  ios_provider_adapter: "GA4/Firebase adapter behind the iOS facade"
+  ios_direct_sdk_boundary: "Only the iOS provider adapter may call Firebase Analytics.logEvent. Business code must use the facade."
+  required_tests:
+    - ga4_event_name_rules
+    - ga4_param_name_rules
+    - ga4_param_count_limit
+    - reserved_prefix_guardrails
+    - privacy_field_guardrails
+    - reporter_output_contract
+events:
+
+  # Code-stable Tutorial v1
+
+  - event_name: tutorial_center_viewed
+    goal: Measure exposure for the Home tutorial center and selected tutorial category.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Home renders the formal Tutorials section or a Tutorials tab becomes the selected visible category. Emit at most once per screen presentation and selected category.
+    trigger_ios: Home renders the formal Tutorials section or a Tutorials tab becomes the selected visible category. Emit at most once per screen presentation and selected category.
+    required_properties:
+      - entry_point
+      - surface
+      - tutorial_category
+    optional_properties:
+      - trigger_source
+    allowed_values:
+      entry_point:
+        - home
+        - unknown
+      surface:
+        - home
+        - tutorial
+        - unknown
+      tutorial_category:
+        - device
+        - memo_ai
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+    privacy_notes: Do not include card copy, localized titles, visible tutorial text, asset paths, or route names.
+    ga4_custom_definitions:
+      - entry_point
+      - surface
+      - tutorial_category
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - tutorial_center_usage
+      - tutorial_category_exposure
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Open Home and scroll to the Tutorials section; confirm tutorial_center_viewed appears once for the visible selected category.
+      - Switch between Device and Memo AI tutorial tabs and confirm category exposure is not over-counted within one screen presentation.
+      - Confirm no tutorial copy, card title, asset path, or route name is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Open Home and verify tutorial_center_viewed uses the same entry_point, surface, and tutorial_category values as Android.
+      - Confirm no tutorial copy, card title, asset path, or route name is present.
+
+  - event_name: tutorial_card_opened
+    goal: Measure which formal tutorial cards users enter from Home.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User taps a Home tutorial card and navigation to the Tutorial screen is requested.
+    trigger_ios: User taps a Home tutorial card and navigation to the Tutorial screen is requested.
+    required_properties:
+      - tutorial_id
+      - tutorial_category
+      - entry_point
+      - surface
+      - trigger_source
+    optional_properties: []
+    allowed_values:
+      tutorial_id:
+        - overview
+        - ai
+        - wear_glasses
+        - control_music
+        - capture
+        - call
+        - memory
+        - translate
+        - reminder
+        - quick_notes
+        - recording_notes
+        - voice_commands
+        - power
+        - unknown
+      tutorial_category:
+        - device
+        - memo_ai
+        - unknown
+      entry_point:
+        - home
+        - unknown
+      surface:
+        - home
+        - tutorial
+        - unknown
+      trigger_source:
+        - user
+        - unknown
+    privacy_notes: tutorial_id and tutorial_category must be stable enums derived from route metadata, not localized card titles. Do not upload card title text, visible copy, thumbnails, asset paths, or route names.
+    ga4_custom_definitions:
+      - tutorial_id
+      - tutorial_category
+      - entry_point
+      - surface
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - tutorial_card_distribution
+      - tutorial_center_usage
+    verification_android:
+      - Tap each Home tutorial card and confirm tutorial_card_opened carries the correct tutorial_id and tutorial_category.
+      - Confirm tutorial_id values mirror the Android TutorialId route enum after lower-snake-case mapping.
+      - Confirm no localized title, visible copy, thumbnail path, asset path, or route name is present.
+    verification_ios:
+      - Tap the matching iOS tutorial cards and confirm tutorial_card_opened uses the same tutorial_id and tutorial_category values as Android.
+      - Confirm no localized title, visible copy, thumbnail path, asset path, or route name is present.
+
+  - event_name: tutorial_flow_started
+    goal: Measure starts for the shared Tutorial screen flow, including first-run Full tutorial and Home card tutorials.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Tutorial screen receives a DeviceTutorial route, builds pages for the route tutorialId, and the first tutorial page becomes visible. Emit once per Tutorial screen presentation.
+    trigger_ios: Tutorial screen receives an equivalent tutorial route, builds pages for the tutorial id, and the first tutorial page becomes visible. Emit once per Tutorial screen presentation.
+    required_properties:
+      - tutorial_id
+      - tutorial_category
+      - entry_point
+      - surface
+      - trigger_source
+    optional_properties: []
+    allowed_values:
+      tutorial_id:
+        - full
+        - overview
+        - ai
+        - wear_glasses
+        - control_music
+        - capture
+        - call
+        - memory
+        - translate
+        - reminder
+        - quick_notes
+        - recording_notes
+        - voice_commands
+        - power
+        - unknown
+      tutorial_category:
+        - onboarding
+        - device
+        - memo_ai
+        - unknown
+      entry_point:
+        - onboarding
+        - home
+        - device
+        - unknown
+      surface:
+        - onboarding
+        - tutorial
+        - home
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+    privacy_notes: Do not include page text, localized copy, asset paths, user identifiers, device serial numbers, or route names.
+    ga4_custom_definitions:
+      - tutorial_id
+      - tutorial_category
+      - entry_point
+      - surface
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - tutorial_flow_funnel
+      - tutorial_reach
+    verification_android:
+      - Trigger the first-run Full tutorial after device setup and confirm tutorial_flow_started appears once with tutorial_id=full and tutorial_category=onboarding.
+      - Open several Home tutorial cards and confirm tutorial_flow_started appears once per screen presentation with the card tutorial_id.
+      - Confirm no page text, asset path, user identifier, device serial number, or route name is present.
+    verification_ios:
+      - Trigger first-run and Home card tutorial flows and confirm the same tutorial_id, tutorial_category, entry_point, surface, and trigger_source values as Android.
+      - Confirm no page text, asset path, user identifier, device serial number, or route name is present.
+
+  - event_name: tutorial_flow_completed
+    goal: Measure completion for the shared Tutorial screen flow.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User reaches the final tutorial page or presses the final primary action and the Tutorial screen closes through the completed path.
+    trigger_ios: User reaches the final tutorial page or presses the final primary action and the Tutorial screen closes through the completed path.
+    required_properties:
+      - tutorial_id
+      - tutorial_category
+      - entry_point
+      - surface
+      - trigger_source
+    optional_properties: []
+    allowed_values:
+      tutorial_id:
+        - full
+        - overview
+        - ai
+        - wear_glasses
+        - control_music
+        - capture
+        - call
+        - memory
+        - translate
+        - reminder
+        - quick_notes
+        - recording_notes
+        - voice_commands
+        - power
+        - unknown
+      tutorial_category:
+        - onboarding
+        - device
+        - memo_ai
+        - unknown
+      entry_point:
+        - onboarding
+        - home
+        - device
+        - unknown
+      surface:
+        - onboarding
+        - tutorial
+        - home
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+    privacy_notes: Only record stable tutorial enums and context. Do not include page text, visible copy, media paths, durations, user identifiers, or device serial numbers.
+    ga4_custom_definitions:
+      - tutorial_id
+      - tutorial_category
+      - entry_point
+      - surface
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - tutorial_flow_funnel
+      - tutorial_completion_rate
+    verification_android:
+      - Complete the first-run Full tutorial and confirm tutorial_flow_completed appears after tutorial_flow_started with matching tutorial_id and tutorial_category.
+      - Complete a Home card tutorial and confirm tutorial_flow_completed appears for that tutorial_id.
+      - Confirm no page text, visible copy, media path, duration, user identifier, or device serial number is present.
+    verification_ios:
+      - Complete first-run and Home card tutorial flows and confirm tutorial_flow_completed appears after tutorial_flow_started with matching enum values.
+      - Confirm no page text, visible copy, media path, duration, user identifier, or device serial number is present.
+
+  - event_name: tutorial_flow_interrupted
+    goal: Measure tutorial exits and controlled failures before the completed path.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User confirms exit, closes a non-Full tutorial before completion, or a required tutorial action fails and prevents normal completion.
+    trigger_ios: User confirms exit, closes a non-Full tutorial before completion, or a required tutorial action fails and prevents normal completion.
+    required_properties:
+      - tutorial_id
+      - tutorial_category
+      - failure_reason
+      - entry_point
+      - surface
+      - trigger_source
+    optional_properties: []
+    allowed_values:
+      tutorial_id:
+        - full
+        - overview
+        - ai
+        - wear_glasses
+        - control_music
+        - capture
+        - call
+        - memory
+        - translate
+        - reminder
+        - quick_notes
+        - recording_notes
+        - voice_commands
+        - power
+        - unknown
+      tutorial_category:
+        - onboarding
+        - device
+        - memo_ai
+        - unknown
+      failure_reason:
+        - user_cancelled
+        - network_error
+        - permission_denied
+        - validation_failed
+        - timeout
+        - unsupported_state
+        - sdk_error
+        - file_missing
+        - decode_error
+        - unknown
+      entry_point:
+        - onboarding
+        - home
+        - device
+        - unknown
+      surface:
+        - onboarding
+        - tutorial
+        - home
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+    privacy_notes: Use typed failure_reason only. Do not include page text, raw player state, raw exceptions, asset paths, route names, stack traces, user identifiers, or device serial numbers.
+    ga4_custom_definitions:
+      - tutorial_id
+      - tutorial_category
+      - failure_reason
+      - entry_point
+      - surface
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - tutorial_flow_funnel
+      - tutorial_interruption_breakdown
+    verification_android:
+      - Close the first-run Full tutorial through the exit dialog and confirm tutorial_flow_interrupted appears with failure_reason=user_cancelled.
+      - Close a Home card tutorial before completion and confirm tutorial_flow_interrupted appears with that tutorial_id.
+      - Simulate a controlled action failure such as Memo AI enable failure and confirm an approved non-PII failure_reason is used.
+      - Confirm no page text, raw error, asset path, route name, stack trace, user identifier, or device serial number is present.
+    verification_ios:
+      - Close first-run and Home card tutorial flows before completion and confirm tutorial_flow_interrupted uses the same enum values as Android.
+      - Simulate a controlled action failure and confirm an approved non-PII failure_reason is used.
+      - Confirm no page text, raw error, asset path, route name, stack trace, user identifier, or device serial number is present.
+
+  - event_name: tutorial_help_link_opened
+    goal: Measure accepted opens for tutorial-owned help links.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User taps a tutorial-owned help link, such as the Voice Commands link inside the Tutorial screen, and openUrl returns success.
+    trigger_ios: User taps a tutorial-owned help link and the iOS open action returns success.
+    required_properties:
+      - tutorial_id
+      - tutorial_category
+      - help_type
+      - entry_point
+      - surface
+      - trigger_source
+    optional_properties: []
+    allowed_values:
+      tutorial_id:
+        - voice_commands
+        - ai
+        - full
+        - unknown
+      tutorial_category:
+        - onboarding
+        - memo_ai
+        - unknown
+      help_type:
+        - voice_commands
+        - tutorial
+        - unknown
+      entry_point:
+        - onboarding
+        - home
+        - device
+        - unknown
+      surface:
+        - tutorial
+        - onboarding
+        - unknown
+      trigger_source:
+        - user
+        - unknown
+    privacy_notes: Do not include full URLs, URL paths, help titles, localized copy, browser details, tokens, referrers, or user identifiers.
+    ga4_custom_definitions:
+      - tutorial_id
+      - tutorial_category
+      - help_type
+      - entry_point
+      - surface
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - tutorial_help_link_usage
+      - tutorial_content_engagement
+    verification_android:
+      - Tap the Voice Commands help link inside the Tutorial screen and confirm tutorial_help_link_opened appears once with help_type=voice_commands.
+      - Confirm no full URL, URL path, help title, localized copy, browser detail, token, referrer, or user identifier is present.
+    verification_ios:
+      - Tap the matching tutorial-owned help link and confirm tutorial_help_link_opened uses the same enum values as Android.
+      - Confirm no full URL, URL path, help title, localized copy, browser detail, token, referrer, or user identifier is present.
+
+  - event_name: tutorial_help_link_open_failed
+    goal: Measure failures when tutorial-owned help links cannot be opened.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User taps a tutorial-owned help link and openUrl returns false.
+    trigger_ios: User taps a tutorial-owned help link and the iOS open action fails.
+    required_properties:
+      - tutorial_id
+      - tutorial_category
+      - help_type
+      - failure_reason
+      - entry_point
+      - surface
+    optional_properties:
+      - trigger_source
+    allowed_values:
+      tutorial_id:
+        - voice_commands
+        - ai
+        - full
+        - unknown
+      tutorial_category:
+        - onboarding
+        - memo_ai
+        - unknown
+      help_type:
+        - voice_commands
+        - tutorial
+        - unknown
+      failure_reason:
+        - validation_failed
+        - unsupported_state
+        - sdk_error
+        - network_error
+        - timeout
+        - unknown
+      entry_point:
+        - onboarding
+        - home
+        - device
+        - unknown
+      surface:
+        - tutorial
+        - onboarding
+        - unknown
+      trigger_source:
+        - user
+        - unknown
+    privacy_notes: Use typed failure_reason only. Do not include full URLs, URL paths, browser errors, raw exceptions, tokens, referrers, response bodies, stack traces, or user identifiers.
+    ga4_custom_definitions:
+      - tutorial_id
+      - tutorial_category
+      - help_type
+      - failure_reason
+      - entry_point
+      - surface
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - tutorial_help_link_usage
+      - tutorial_help_failure_breakdown
+    verification_android:
+      - Simulate an invalid or unsupported tutorial-owned help link and confirm tutorial_help_link_open_failed appears with an approved failure_reason.
+      - Confirm tutorial_help_link_opened is not emitted for the same failed attempt.
+      - Confirm no full URL, URL path, browser error, raw exception, token, referrer, response body, stack trace, or user identifier is present.
+    verification_ios:
+      - Simulate an invalid or unsupported tutorial-owned help link and confirm tutorial_help_link_open_failed appears with an approved failure_reason.
+      - Confirm tutorial_help_link_opened is not emitted for the same failed attempt.
+      - Confirm no full URL, URL path, browser error, raw exception, token, referrer, response body, stack trace, or user identifier is present.

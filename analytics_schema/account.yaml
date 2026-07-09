@@ -1,0 +1,655 @@
+schema_version: 2
+owner: account
+platforms:
+  - android
+  - ios
+common_properties:
+  injected_by_adapter:
+    - platform
+    - environment
+    - build_region
+    - build_type
+    - app_version_name
+    - app_version_code
+  definitions:
+    platform: Lowercase client platform, such as android or ios.
+    environment: Analytics environment, test or prod.
+    build_region: Analytics build region. Current Android rule is prod -> us, test -> sg.
+    build_type: Client build type such as debug or release.
+    app_version_name: Public app version name injected by the client adapter.
+    app_version_code: Numeric app version code injected by the client adapter.
+implementation_contract:
+  android_contract_layer: "domain:api:analytics"
+  android_tracker: "AnalyticsTracker"
+  android_event_type: "AnalyticsEvent"
+  android_event_spec_type: "AnalyticsEventSpec"
+  android_provider_adapter: "Ga4AnalyticsAdapter"
+  android_direct_sdk_boundary: "Only the app-level provider adapter may call FirebaseAnalytics. Business, feature, domain, and data code must use typed reporters or AnalyticsTracker."
+  ios_contract_layer: "iOS analytics facade matching this schema"
+  ios_provider_adapter: "GA4/Firebase adapter behind the iOS facade"
+  ios_direct_sdk_boundary: "Only the iOS provider adapter may call Firebase Analytics.logEvent. Business code must use the facade."
+  required_tests:
+    - ga4_event_name_rules
+    - ga4_param_name_rules
+    - ga4_param_count_limit
+    - reserved_prefix_guardrails
+    - privacy_field_guardrails
+    - reporter_output_contract
+events:
+  - event_name: account_login_started
+    goal: Measure entry into the formal account login or auth-state restoration flow.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User submits an email-code login, starts Google or Apple login, or the app starts session/auth-state restoration.
+    trigger_ios: User submits an email-code login, starts Google or Apple login, or the app starts session/auth-state restoration.
+    required_properties:
+      - sign_in_type
+      - entry_point
+      - surface
+      - trigger_source
+    optional_properties: []
+    allowed_values:
+      sign_in_type:
+        - email
+        - google
+        - apple
+        - unknown
+      entry_point:
+        - cold_start
+        - login
+        - session_restore
+        - notification
+        - deep_link
+        - settings
+        - unknown
+      surface:
+        - application
+        - login
+        - settings
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - session_restore
+        - token_refresh
+        - unknown
+    privacy_notes: Do not include email, verification code, phone, nickname, provider account id, auth token, refresh token, raw login request, raw login response, or third-party SDK payload.
+    ga4_custom_definitions:
+      - sign_in_type
+      - entry_point
+      - surface
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - account_login_funnel
+      - account_usable_state
+      - login_entry_breakdown
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Start email, Google, Apple, and session-restore login paths and confirm account_login_started appears once per controlled attempt with platform=android.
+      - Confirm sign_in_type, entry_point, surface, and trigger_source use approved enum values.
+      - Confirm no email, verification code, phone, nickname, provider account id, token, raw request, raw response, or SDK payload is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Start email, Google, Apple, and session-restore login paths and confirm account_login_started appears once per controlled attempt with platform=ios.
+      - Confirm sign_in_type, entry_point, surface, and trigger_source use approved enum values.
+      - Confirm no email, verification code, phone, nickname, provider account id, token, raw request, raw response, or SDK payload is present.
+
+  - event_name: account_login_completed
+    goal: Measure successful login or auth-state restoration into an account-usable state.
+    recommended_or_custom: recommended(login)
+    key_event: false
+    trigger_android: Login or auth-state restoration succeeds and the app can enter account-usable state.
+    trigger_ios: Login or auth-state restoration succeeds and the app can enter account-usable state.
+    required_properties:
+      - sign_in_type
+      - entry_point
+      - surface
+    optional_properties:
+      - trigger_source
+    allowed_values:
+      sign_in_type:
+        - email
+        - google
+        - apple
+        - unknown
+      entry_point:
+        - cold_start
+        - login
+        - session_restore
+        - notification
+        - deep_link
+        - settings
+        - unknown
+      surface:
+        - application
+        - login
+        - settings
+        - home
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - session_restore
+        - token_refresh
+        - unknown
+    privacy_notes: user_id may be set only as a stable internal non-PII GA4 User-ID after success. Do not include email, phone, nickname, provider account id, auth token, refresh token, raw response, or SDK payload.
+    ga4_custom_definitions:
+      - sign_in_type
+      - entry_point
+      - surface
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - account_login_funnel
+      - account_usable_state
+      - login_completion_rate
+    verification_android:
+      - Enable GA4 DebugView and Realtime for the Android app stream.
+      - Complete email, Google, Apple, and valid session-restore flows and confirm account_login_completed appears once with platform=android.
+      - Confirm account_login_completed replaces the deprecated login event for the same controlled behavior and the app does not double-send old and new login events.
+      - Confirm user_id is internal non-PII if present, and no email, phone, nickname, token, provider account id, raw response, or SDK payload is present.
+    verification_ios:
+      - Enable GA4 DebugView and Realtime for the iOS app stream.
+      - Complete email, Google, Apple, and valid session-restore flows and confirm account_login_completed appears once with platform=ios.
+      - Confirm account_login_completed replaces the deprecated login event for the same controlled behavior and the app does not double-send old and new login events.
+      - Confirm user_id is internal non-PII if present, and no email, phone, nickname, token, provider account id, raw response, or SDK payload is present.
+
+  - event_name: account_login_failed
+    goal: Identify login or auth-state restoration failures before the user reaches account-usable state.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Login or auth-state restoration ends in a failure or formal blocked state.
+    trigger_ios: Login or auth-state restoration ends in a failure or formal blocked state.
+    required_properties:
+      - sign_in_type
+      - failure_reason
+      - entry_point
+      - surface
+    optional_properties:
+      - trigger_source
+    allowed_values:
+      sign_in_type:
+        - email
+        - google
+        - apple
+        - unknown
+      failure_reason:
+        - network_error
+        - permission_denied
+        - validation_failed
+        - timeout
+        - unauthorized
+        - unsupported_state
+        - sdk_error
+      entry_point:
+        - cold_start
+        - login
+        - session_restore
+        - notification
+        - deep_link
+        - settings
+        - unknown
+      surface:
+        - application
+        - login
+        - settings
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - session_restore
+        - token_refresh
+        - unknown
+    privacy_notes: Map errors to approved failure_reason values. Do not include email, verification code, phone, nickname, provider account id, auth token, refresh token, raw error message, raw exception, stack trace, request id, response body, or SDK payload.
+    ga4_custom_definitions:
+      - sign_in_type
+      - failure_reason
+      - entry_point
+      - surface
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - account_login_funnel
+      - login_failure_breakdown
+      - account_usable_state
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Simulate validation, authorization, timeout, SDK, and network failures and confirm account_login_failed appears with platform=android.
+      - Confirm failure_reason uses only approved enum values and the app does not also send the deprecated login-failure event for the same controlled failure.
+      - Confirm no email, verification code, phone, nickname, token, provider account id, raw error, request id, response body, stack trace, or SDK payload is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Simulate validation, authorization, timeout, SDK, and network failures and confirm account_login_failed appears with platform=ios.
+      - Confirm failure_reason uses only approved enum values and the app does not also send the deprecated login-failure event for the same controlled failure.
+      - Confirm no email, verification code, phone, nickname, token, provider account id, raw error, request id, response body, stack trace, or SDK payload is present.
+
+  - event_name: account_settings_viewed
+    goal: Measure entry into formal account information and data-control surfaces.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User opens account information or Data Controls from Settings or another approved account entry point.
+    trigger_ios: User opens account information or Data Controls from Settings or another approved account entry point.
+    required_properties:
+      - entry_point
+      - surface
+    optional_properties:
+      - trigger_source
+    allowed_values:
+      entry_point:
+        - settings
+        - home
+        - login
+        - unknown
+      surface:
+        - settings
+        - account
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+    privacy_notes: Do not include account details, email, phone, nickname, user-generated profile text, or internal account identifiers.
+    ga4_custom_definitions:
+      - entry_point
+      - surface
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - account_settings_entry
+      - account_management_funnel
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Open account settings from Settings and confirm account_settings_viewed appears once with platform=android.
+      - Confirm no account details, email, phone, nickname, or internal account identifiers are present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Open account settings from Settings and confirm account_settings_viewed appears once with platform=ios.
+      - Confirm no account details, email, phone, nickname, or internal account identifiers are present.
+
+  - event_name: account_data_control_submitted
+    goal: Measure formal submission of high-risk account data controls.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User confirms Export Data, Delete Data, or Delete Account and the request is submitted.
+    trigger_ios: User confirms Export Data, Delete Data, or Delete Account and the request is submitted.
+    required_properties:
+      - action_type
+      - surface
+      - trigger_source
+    optional_properties:
+      - entry_point
+    allowed_values:
+      action_type:
+        - export_data
+        - delete_data
+        - delete_account
+      surface:
+        - account
+        - settings
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+      entry_point:
+        - settings
+        - account_settings
+        - unknown
+    privacy_notes: action_type must be a low-cardinality enum. Do not include user-entered confirmation text, account content, request payload, email, phone, nickname, token, or identifiers.
+    ga4_custom_definitions:
+      - action_type
+      - surface
+      - trigger_source
+      - entry_point
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - account_data_control_funnel
+      - high_risk_account_action_volume
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Submit Export Data, Delete Data, and Delete Account from Android and confirm account_data_control_submitted appears with each approved action_type.
+      - Confirm no confirmation text, account content, request payload, email, phone, nickname, token, or identifiers are present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Submit Export Data, Delete Data, and Delete Account from iOS and confirm account_data_control_submitted appears with each approved action_type.
+      - Confirm no confirmation text, account content, request payload, email, phone, nickname, token, or identifiers are present.
+
+  - event_name: account_data_control_completed
+    goal: Measure successful or accepted completion of high-risk account data controls.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: The app receives success or accepted status for Export Data, Delete Data, or Delete Account and shows a user-visible success state.
+    trigger_ios: The app receives success or accepted status for Export Data, Delete Data, or Delete Account and shows a user-visible success state.
+    required_properties:
+      - action_type
+      - surface
+    optional_properties:
+      - entry_point
+      - trigger_source
+    allowed_values:
+      action_type:
+        - export_data
+        - delete_data
+        - delete_account
+      surface:
+        - account
+        - settings
+        - unknown
+      entry_point:
+        - settings
+        - account_settings
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+    privacy_notes: Do not include exported data contents, deletion details, server payload, email, phone, nickname, token, request id, response body, or account identifiers.
+    ga4_custom_definitions:
+      - action_type
+      - surface
+      - entry_point
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - account_data_control_funnel
+      - high_risk_account_action_completion
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Complete or receive accepted status for each data-control action and confirm account_data_control_completed appears with platform=android.
+      - For Delete Account completion, confirm user_id and account user properties are cleared after completion.
+      - Confirm no exported data contents, deletion details, server payload, request id, response body, token, or identifiers are present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Complete or receive accepted status for each data-control action and confirm account_data_control_completed appears with platform=ios.
+      - For Delete Account completion, confirm user_id and account user properties are cleared after completion.
+      - Confirm no exported data contents, deletion details, server payload, request id, response body, token, or identifiers are present.
+
+  - event_name: account_data_control_failed
+    goal: Identify formal failures or blocked states for high-risk account data controls.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Export Data, Delete Data, or Delete Account fails or is formally blocked before a success or accepted state.
+    trigger_ios: Export Data, Delete Data, or Delete Account fails or is formally blocked before a success or accepted state.
+    required_properties:
+      - action_type
+      - failure_reason
+      - surface
+    optional_properties:
+      - entry_point
+      - trigger_source
+    allowed_values:
+      action_type:
+        - export_data
+        - delete_data
+        - delete_account
+      failure_reason:
+        - network_error
+        - permission_denied
+        - validation_failed
+        - timeout
+        - unauthorized
+        - unsupported_state
+        - sdk_error
+      surface:
+        - account
+        - settings
+        - unknown
+      entry_point:
+        - settings
+        - account_settings
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+    privacy_notes: Map failures to approved failure_reason values. Do not include failure detail text, server error text, request id, response body, account contents, email, phone, nickname, token, or stack trace.
+    ga4_custom_definitions:
+      - action_type
+      - failure_reason
+      - surface
+      - entry_point
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - account_data_control_funnel
+      - data_control_failure_breakdown
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Simulate network, permission, authorization, validation, timeout, and SDK failures for data-control actions and confirm account_data_control_failed appears with approved enums.
+      - Confirm no failure detail text, server error text, request id, response body, account contents, email, phone, nickname, token, or stack trace is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Simulate network, permission, authorization, validation, timeout, and SDK failures for data-control actions and confirm account_data_control_failed appears with approved enums.
+      - Confirm no failure detail text, server error text, request id, response body, account contents, email, phone, nickname, token, or stack trace is present.
+
+  - event_name: account_username_rule_evaluated
+    goal: Measure formal username or display-name rule evaluation after the user submits a name.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User submits a username or display name from login completion or account settings and formal validation runs.
+    trigger_ios: User submits a username or display name from login completion or account settings and formal validation runs.
+    required_properties:
+      - surface
+      - trigger_source
+    optional_properties:
+      - entry_point
+    allowed_values:
+      surface:
+        - login
+        - account
+        - settings
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+      entry_point:
+        - login
+        - settings
+        - account_settings
+        - unknown
+    privacy_notes: Do not include nickname, submitted username, normalized username, text length, account detail, or profile content.
+    ga4_custom_definitions:
+      - surface
+      - trigger_source
+      - entry_point
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - username_rule_volume
+      - account_profile_completion
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Submit a valid username or display name and confirm account_username_rule_evaluated appears with platform=android.
+      - Confirm no nickname, submitted username, normalized username, text length, account detail, or profile content is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Submit a valid username or display name and confirm account_username_rule_evaluated appears with platform=ios.
+      - Confirm no nickname, submitted username, normalized username, text length, account detail, or profile content is present.
+
+  - event_name: account_username_rule_blocked
+    goal: Identify low-cardinality username or display-name validation blockers.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Username or display-name submission is blocked by length, character set, duplicate, reserved-word, or other formal validation.
+    trigger_ios: Username or display-name submission is blocked by length, character set, duplicate, reserved-word, or other formal validation.
+    required_properties:
+      - rule_type
+      - failure_reason
+      - surface
+    optional_properties:
+      - entry_point
+      - trigger_source
+    allowed_values:
+      rule_type:
+        - empty
+        - too_short
+        - too_long
+        - unsupported_character
+        - duplicate
+        - reserved_word
+        - unknown
+      failure_reason:
+        - validation_failed
+        - network_error
+        - timeout
+        - unsupported_state
+        - sdk_error
+      surface:
+        - login
+        - account
+        - settings
+        - unknown
+      entry_point:
+        - login
+        - settings
+        - account_settings
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+    privacy_notes: rule_type must be a low-cardinality enum. Do not include blocked nickname, submitted username, normalized username, text length, raw validation message, account detail, or profile content.
+    ga4_custom_definitions:
+      - rule_type
+      - failure_reason
+      - surface
+      - entry_point
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - username_rule_blocker_breakdown
+      - account_profile_completion
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Submit invalid username values for each approved rule_type and confirm account_username_rule_blocked appears with approved enums.
+      - Confirm no blocked nickname, submitted username, normalized username, text length, raw validation message, account detail, or profile content is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Submit invalid username values for each approved rule_type and confirm account_username_rule_blocked appears with approved enums.
+      - Confirm no blocked nickname, submitted username, normalized username, text length, raw validation message, account detail, or profile content is present.
+
+  - event_name: account_logout_completed
+    goal: Measure user-initiated logout completion and account analytics identity cleanup.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User confirms logout and the app completes local account cleanup.
+    trigger_ios: User confirms logout and the app completes local account cleanup.
+    required_properties:
+      - entry_point
+      - surface
+      - trigger_source
+    optional_properties: []
+    allowed_values:
+      entry_point:
+        - settings
+        - account_settings
+        - unknown
+      surface:
+        - account
+        - settings
+        - unknown
+      trigger_source:
+        - user
+    privacy_notes: After logout, clear GA4 User-ID and account user properties including sign_in_type, has_bound_device, subscription_tier, and main_language. Do not include user id as an event parameter, email, phone, nickname, token, or logout payload.
+    ga4_custom_definitions:
+      - entry_point
+      - surface
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - account_logout_volume
+      - identity_cleanup_audit
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Complete logout from Settings and confirm account_logout_completed appears once with platform=android.
+      - Confirm GA4 User-ID and account user properties are cleared after logout.
+      - Confirm no user id event parameter, email, phone, nickname, token, or logout payload is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Complete logout from Settings and confirm account_logout_completed appears once with platform=ios.
+      - Confirm GA4 User-ID and account user properties are cleared after logout.
+      - Confirm no user id event parameter, email, phone, nickname, token, or logout payload is present.
+
+  - event_name: account_auth_state_invalidated
+    goal: Measure non-user-initiated auth invalidation and identity cleanup.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Token, session, or account authorization becomes invalid outside a user-initiated logout and the app clears local account state.
+    trigger_ios: Token, session, or account authorization becomes invalid outside a user-initiated logout and the app clears local account state.
+    required_properties:
+      - failure_reason
+      - entry_point
+      - surface
+      - trigger_source
+    optional_properties: []
+    allowed_values:
+      failure_reason:
+        - unauthorized
+        - permission_denied
+        - unsupported_state
+        - sdk_error
+        - network_error
+        - timeout
+      entry_point:
+        - cold_start
+        - session_restore
+        - home
+        - settings
+        - unknown
+      surface:
+        - application
+        - login
+        - home
+        - settings
+        - account
+        - unknown
+      trigger_source:
+        - system
+        - server_push
+        - token_refresh
+        - session_restore
+        - unknown
+    privacy_notes: Clear GA4 User-ID and account user properties after invalidation. Do not include expired token, refresh token, account id, email, phone, nickname, raw auth response, raw error message, exception, stack trace, request id, or response body.
+    ga4_custom_definitions:
+      - failure_reason
+      - entry_point
+      - surface
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - auth_invalidation_volume
+      - account_usable_state
+      - identity_cleanup_audit
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Simulate token or session invalidation outside user logout and confirm account_auth_state_invalidated appears once with platform=android.
+      - Confirm GA4 User-ID and account user properties are cleared after invalidation.
+      - Confirm no expired token, refresh token, account id, email, phone, nickname, raw auth response, raw error, request id, response body, or stack trace is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Simulate token or session invalidation outside user logout and confirm account_auth_state_invalidated appears once with platform=ios.
+      - Confirm GA4 User-ID and account user properties are cleared after invalidation.
+      - Confirm no expired token, refresh token, account id, email, phone, nickname, raw auth response, raw error, request id, response body, or stack trace is present.
