@@ -853,6 +853,127 @@ Do not extend these values without a Tracking Plan and schema update. Map unknow
 - Alert-to-playback funnel: `reminder_alert_triggered` -> `reminder_playback_started` or `reminder_playback_failed`, split by `alert_mode`, `failure_reason`, and `platform`.
 - Playback failure breakdown: `reminder_playback_failed` by `failure_reason`, `surface`, and `platform`.
 
+## Notes Production Slice
+
+The Notes slice covers Notes list/tag filtering, detail opens, recording, import, processing/generation, settings, export/share, deletion, summary version selection, and speaker-label actions. All P0/P1 events below are defined in `analytics_schema/note.yaml`.
+
+This slice keeps the Feishu Tracking Plan's plural event names for list/settings (`notes_list_viewed`, `notes_setting_*`) and speaker-label names (`speaker_label_*`), and uses `note_` for single-Note actions. The validator allows `notes_` and `speaker_label_` as Notes-owner exceptions for these approved names only.
+
+### Notes Event Priority
+
+| Priority | Event |
+| --- | --- |
+| P0 | `notes_list_viewed`, `note_detail_viewed`, `note_recording_started`, `note_recording_completed`, `note_recording_failed`, `note_import_started`, `note_import_completed`, `note_import_failed`, `note_processing_completed`, `note_processing_failed`, `note_generation_submitted`, `notes_setting_viewed`, `notes_setting_updated`, `notes_setting_failed` |
+| P1 | `note_export_started`, `note_export_completed`, `note_export_failed`, `note_deleted`, `note_delete_failed`, `note_summary_version_selected`, `note_speaker_label_evaluated`, `note_speaker_label_completed`, `note_speaker_label_blocked` |
+
+`notes_empty_tutorial_viewed`, `notes_empty_tutorial_opened`, and `notes_empty_tutorial_load_failed` remain deferred until the App has a formal empty-state tutorial surface separate from the normal Notes list/product funnel.
+
+| Event | Owner | Platforms | Trigger | Required Properties |
+| --- | --- | --- | --- | --- |
+| `notes_list_viewed` | note | Android+iOS | User enters Notes list or changes the visible Notes tag filter | `entry_point`, `surface`, `note_filter` |
+| `note_detail_viewed` | note | Android+iOS | User opens one Note detail page and the detail surface becomes visible | `surface`, `note_type` |
+| `note_recording_started` | note | Android+iOS | Notes recording start is accepted and a local recording draft/session is created | `surface`, `recording_source` |
+| `note_recording_completed` | note | Android+iOS | Started Notes recording stops successfully and finalization proceeds | `surface`, `recording_source`, `note_type` |
+| `note_recording_failed` | note | Android+iOS | Notes recording start, stop, or finalization fails before successful finalization | `failure_reason`, `surface`, `recording_source` |
+| `note_import_started` | note | Android+iOS | User or system submits an audio file into Notes import and validation starts | `surface`, `import_source` |
+| `note_import_completed` | note | Android+iOS | Imported audio passes validation and a local Note is created or queued | `surface`, `import_source`, `note_type` |
+| `note_import_failed` | note | Android+iOS | Imported audio is rejected or import fails before a local Note is accepted | `failure_reason`, `surface`, `import_source` |
+| `note_processing_completed` | note | Android+iOS | Note processing reaches successful transcript, summary, or speaker-label result | `surface`, `note_type`, `processing_type` |
+| `note_processing_failed` | note | Android+iOS | Transcript, summary, or speaker-label processing reaches a failed or blocked terminal state | `failure_reason`, `surface`, `note_type`, `processing_type` |
+| `note_generation_submitted` | note | Android+iOS | User taps Generate/Re-generate and the request is accepted for processing | `surface`, `note_type`, `generation_type` |
+| `notes_setting_viewed` | note | Android+iOS | User opens Notes settings and the settings surface becomes visible | `surface` |
+| `notes_setting_updated` | note | Android+iOS | User changes a Notes setting and the new value is accepted/persisted | `surface`, `setting_type` |
+| `notes_setting_failed` | note | Android+iOS | Notes setting change is rejected, fails to persist, or rolls back | `failure_reason`, `surface`, `setting_type` |
+| `note_export_started` | note | Android+iOS | User starts an export/share action for a Note and the request is accepted | `surface`, `note_type`, `export_type` |
+| `note_export_completed` | note | Android+iOS | Notes export/share preparation succeeds and the share sheet or saved artifact is available | `surface`, `note_type`, `export_type` |
+| `note_export_failed` | note | Android+iOS | Notes export/share preparation or share sheet presentation fails before success | `failure_reason`, `surface`, `note_type`, `export_type` |
+| `note_deleted` | note | Android+iOS | User confirms single or batch deletion and the delete operation completes successfully | `surface`, `note_type`, `delete_scope` |
+| `note_delete_failed` | note | Android+iOS | User-confirmed single or batch deletion fails or rolls back before success | `failure_reason`, `surface`, `note_type`, `delete_scope` |
+| `note_summary_version_selected` | note | Android+iOS | User selects a generated summary version and the selected version becomes visible | `surface`, `note_type`, `version_count_bucket` |
+| `note_speaker_label_evaluated` | note | Android+iOS | Note detail evaluates whether speaker labels are available, pending, or blocked | `surface`, `note_type` |
+| `note_speaker_label_completed` | note | Android+iOS | Speaker label generation or rename reaches an accepted successful result | `surface`, `note_type` |
+| `note_speaker_label_blocked` | note | Android+iOS | Speaker-label generation or rename is blocked, fails, or rolls back before success | `failure_reason`, `surface`, `note_type` |
+
+### Notes GA4 Custom Definitions
+
+Recommended event-scoped custom dimensions:
+
+| Parameter | Priority | Reason |
+| --- | --- | --- |
+| `platform` | Shared P0 | Compare Android and iOS Notes behavior in one GA4 property |
+| `environment` | Shared P0 | Separate test and production traffic |
+| `build_region` | Shared P0 | Support regional analysis from adapter-injected metadata |
+| `note_filter` | P0 | Split Notes list usage by All, Recording, Memo, and Call filters |
+| `note_type` | P0 | Split single-Note behavior by Recording, Memo, Call, Mixed, or Unknown |
+| `failure_reason` | P0 | Build failure breakdowns without raw errors |
+| `surface` | P0 | Split list, detail, recording, import, settings, share, and background surfaces |
+| `processing_type` | P0 | Split transcript, summary, and speaker-label processing |
+| `setting_type` | P0 | Split Notes settings changes without sending values |
+| `entry_point` | P1 | Compare Home, tab, notification, deep link, list, and share entries |
+| `recording_source` | P1 | Split App button, glasses shortcut, and automatic call recording starts |
+| `import_source` | P1 | Split system share, file picker, retry, and recovered import tasks |
+| `generation_type` | P1 | Split Summary, Transcript, and Reminder generation requests |
+| `export_type` | P1 | Split audio, transcript, summary, PDF, text, and share actions |
+| `delete_scope` | P1 | Split single and batch deletion |
+| `version_count_bucket` | P1 | Bucket summary version choices without raw ids or counts |
+| `trigger_source` | P1 | Distinguish user, system, and device-triggered Notes actions |
+
+Do not register or upload note id, title, transcript text, summary text, speaker names, raw speaker maps, audio paths, file names, source app names, share targets, contact names, phone numbers, location/address/latitude/longitude, raw locale strings, language labels, previous/new setting values, request ids, response bodies, raw server errors, raw exception messages, or stack traces.
+
+### Notes Allowed Values
+
+Notes-specific enum values (see `analytics_schema/note.yaml` for per-event scope):
+
+| Property | Allowed Values |
+| --- | --- |
+| `note_filter` | `all`, `recording`, `memo`, `call`, `unknown` |
+| `note_type` | `recording`, `memo`, `call`, `mixed`, `unknown` |
+| `surface` | `notes_list`, `note_detail`, `note_recording`, `note_import`, `notes_settings`, `background`, `share_sheet`, `unknown` |
+| `entry_point` | `home`, `notes_tab`, `notes_list`, `notification`, `deep_link`, `system_share`, `unknown` |
+| `recording_source` | `app_record_button`, `glasses_shortcut`, `auto_call_recording`, `unknown` |
+| `import_source` | `system_share`, `file_picker`, `manual_retry`, `recovered_task`, `unknown` |
+| `processing_type` | `transcript`, `summary`, `speaker_label`, `unknown` |
+| `generation_type` | `summary`, `transcript`, `reminder`, `unknown` |
+| `setting_type` | `transcription_language`, `summary_language`, `auto_summary`, `auto_call_recording`, `unknown` |
+| `toggle_state` | `on`, `off`, `unknown` |
+| `export_type` | `audio`, `transcript`, `summary`, `pdf`, `text`, `share`, `unknown` |
+| `delete_scope` | `single`, `batch`, `unknown` |
+| `version_count_bucket` | `one`, `two_to_five`, `six_to_twenty`, `more_than_twenty`, `unknown` |
+| `failure_reason` | Shared low-cardinality values such as `validation_failed`, `network_error`, `timeout`, `unauthorized`, `permission_denied`, `file_too_large`, `file_too_short`, `unsupported_format`, `device_disconnected`, `file_missing`, `sdk_error`, `unsupported_state`, `user_cancelled`, and `unknown` |
+
+Do not extend these values without a Tracking Plan and schema update. Map unmapped platform errors to `unknown`, not raw error text.
+
+### Notes Android Verification Checklist
+
+- Enable GA4 DebugView for the Android app stream.
+- Open Notes list and switch All, Recording, Memo, and Call filters; confirm `notes_list_viewed` carries `note_filter`.
+- Open Recording, Memo, and Call details; confirm `note_detail_viewed` carries `note_type` without ids or content.
+- Start, stop, and fail a Notes recording where possible; confirm `note_recording_started`, `note_recording_completed`, and `note_recording_failed` fire at accepted boundaries only.
+- Import audio through supported Android entries; confirm `note_import_started`, `note_import_completed`, and `note_import_failed` split accepted, success, and failure states.
+- Trigger transcript/summary/speaker-label processing; confirm `note_processing_completed`, `note_processing_failed`, and `note_generation_submitted` use approved enum values.
+- Open Notes settings and change supported settings; confirm `notes_setting_viewed`, `notes_setting_updated`, and `notes_setting_failed` do not send values or raw locales.
+- Exercise export/share, delete, summary version selection, and speaker-label actions; confirm P1 events fire only after accepted boundaries.
+- Confirm all Notes events route through the Android analytics tracker/adapter and do not alter existing Notes control flow.
+
+### Notes iOS Verification Checklist
+
+- Enable GA4 DebugView for the iOS app stream.
+- Verify the same P0/P1 Notes event set as Android using the same event names, required properties, optional properties, enum values, and trigger boundaries.
+- Confirm GA4 can split shared Notes events by `platform=android` and `platform=ios` without platform-specific event names.
+- Confirm iOS errors map to the same `failure_reason` values as Android.
+- Confirm list filter reporting uses `note_filter=all|recording|memo|call`, and single-Note reporting uses `note_type=recording|memo|call`.
+- Confirm all Notes events route through the iOS analytics facade/adapter and no event contains note content, ids, speaker names, audio paths, file names, contact names, location, raw errors, request ids, response bodies, or stack traces.
+
+### Notes Report Usage
+
+- Notes entry/filter usage: `notes_list_viewed` by `note_filter`, `entry_point`, `surface`, `platform`, `environment`, and `build_region`.
+- Recording funnel: `note_recording_started` -> `note_recording_completed` or `note_recording_failed` by `recording_source`, `note_type`, and `failure_reason`.
+- Import funnel: `note_import_started` -> `note_import_completed` or `note_import_failed` by `import_source`, `note_type`, and `failure_reason`.
+- Processing reliability: `note_processing_completed` vs `note_processing_failed` by `processing_type`, `generation_type`, `note_type`, and `platform`.
+- Generation usage: `note_generation_submitted` by `generation_type`, `note_type`, and `platform`.
+- Settings usage: `notes_setting_viewed`, `notes_setting_updated`, and `notes_setting_failed` by `setting_type`, `toggle_state`, and `failure_reason`.
+- P1 actions: export/share, deletion, summary version, and speaker-label funnels by their event-specific dimensions.
+
 ## Tutorial Production Slice
 
 The Tutorial slice covers the formal Tutorial screen shared by first-run onboarding and Home tutorial cards, plus tutorial-owned help links. All v1 events below are defined in `analytics_schema/tutorial.yaml`.
