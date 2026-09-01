@@ -1,6 +1,6 @@
-# GA4 业务异常事件周报
+# GA4 业务异常事件日报与动态区间报告
 
-该工具读取 GA4 Data API 中正式 Schema 批准的业务失败、阻断、降级和失效事件，计算指定区间的异常量、影响用户、结果率、环比和主要原因，并按选择的展示格式输出。默认仍是上一个完整周，并发送飞书卡片。
+该工具读取 GA4 Data API 中正式 Schema 批准的业务失败、阻断、降级和失效事件，计算指定区间的异常量、影响用户、结果率、环比和主要原因，并按选择的展示格式输出。默认统计前一完整自然日、与前日比较，并发送飞书卡片；周报和自定义区间仍可手动选择。
 
 程序按四层组织：`Ga4DataSource/FixtureDataSource` 负责取数，`calculate_report` 产出平台无关的规范化报告，`JsonRenderer/FeishuRenderer/HtmlRenderer` 负责展示，`FeishuDelivery` 只负责投递。网页接入时直接消费 JSON 契约即可，不需要改 GA4 查询或统计逻辑。
 
@@ -16,9 +16,13 @@ python3 tools/ga4_weekly_error_report.py --fixture examples/ga4_weekly_error_rep
 
 ## 2. 动态日期区间
 
-不带日期参数时使用 `previous_complete_week`（上一完整周一至周日）并自动比较紧邻的等长区间。也可以使用预设或显式日期：
+不带日期参数时使用 `previous_complete_day`（前一完整自然日）并自动与前日比较。也可以使用预设或显式日期：
 
 ~~~bash
+# 上一完整周
+python3 tools/ga4_weekly_error_report.py --fixture examples/ga4_weekly_error_report_fixture.json \
+  --preset previous_complete_week --as-of 2026-09-01 --output json
+
 # 最近 7 个完整日
 python3 tools/ga4_weekly_error_report.py --fixture examples/ga4_weekly_error_report_fixture.json \
   --preset recent_7_complete_days --as-of 2026-09-01 --output json
@@ -60,7 +64,7 @@ cd /tmp && python3 -m http.server 8765
 gcloud auth application-default login --scopes=https://www.googleapis.com/auth/analytics.readonly
 ~~~
 
-周报通过 gcloud auth application-default print-access-token 刷新个人 ADC，不读取 Analytics Admin API。若 launchd 找不到 gcloud，在本地配置中填写其绝对路径。
+报告通过 gcloud auth application-default print-access-token 刷新个人 ADC，日常取数不读取 Analytics Admin API。首次创建 GA4 自定义维度可以直接使用 GA4 管理界面；若改用 API 自动创建，才需要 Analytics Admin API 和对应编辑权限。若 launchd 找不到 gcloud，在本地配置中填写其绝对路径。
 
 ## 4. 创建本地私密配置
 
@@ -71,6 +75,7 @@ gcloud auth application-default login --scopes=https://www.googleapis.com/auth/a
   "property_id": "YOUR_GA4_PROPERTY_ID",
   "report_timezone": "Asia/Shanghai",
   "environment": "prod",
+  "ga4_report_url": "https://analytics.google.com/analytics/web/#/analysis/...",
   "data_api_base_url": "YOUR_GA4_DATA_API_BASE_URL",
   "gcloud_bin": "/opt/homebrew/bin/gcloud",
   "feishu_webhook_url": "YOUR_FEISHU_WEBHOOK_URL",
@@ -86,7 +91,9 @@ gcloud auth application-default login --scopes=https://www.googleapis.com/auth/a
 chmod 600 /absolute/path/to/ga4-weekly-error-report.json
 ~~~
 
-environment 可省略，设置时仅允许 `prod`；省略后周报会明确提示数据未按环境过滤。如果配置了该值但 GA4 未注册事件级自定义维度 environment，周报同样不会假装已过滤，而是在数据质量区提示“未应用 environment 过滤”。
+environment 可省略，设置时仅允许 `prod`；省略后报告会明确提示数据未按环境过滤。如果配置了该值但 GA4 未注册事件级自定义维度 environment，报告同样不会假装已过滤，而是在数据质量区提示“未应用 environment 过滤”。
+
+`ga4_report_url` 可省略；填写生产 Property 中保存的 GA4 探索表 URL 后，飞书卡片会显示“查看 GA4 异常明细表”按钮。URL 仅允许 `https://analytics.google.com`，并应继续保存在本地私密配置中。
 
 ## 5. 先手动读取 GA4
 
@@ -102,19 +109,19 @@ python3 tools/ga4_weekly_error_report.py --config /absolute/path/to/ga4-weekly-e
 python3 tools/ga4_weekly_error_report.py --config /absolute/path/to/ga4-weekly-error-report.json
 ~~~
 
-认证、Data API 或响应校验失败时，程序不会发送成功卡片；如果飞书仍可访问，会发送一张脱敏的生成失败卡片并以非零状态退出。成功但没有异常事件时仍会发送零异常周报。
+认证、Data API 或响应校验失败时，程序不会发送成功卡片；如果飞书仍可访问，会发送一张脱敏的生成失败卡片并以非零状态退出。成功但没有异常事件时仍会发送零异常日报。
 
-## 6. 安装每周任务
+## 6. 安装每日任务
 
 复制 launchd 示例到 ~/Library/LaunchAgents/，替换以下占位符：
 
 - __PYTHON__：python3 的绝对路径。
-- __SCRIPT__：周报程序的绝对路径。
+- __SCRIPT__：报告程序的绝对路径。
 - __CONFIG__：权限为 0600 的本地配置绝对路径。
 - __REPOSITORY__：本仓库绝对路径。
 - __LOG_DIRECTORY__：仅当前用户可访问的日志目录。
 
-示例默认每周一 10:00 按 Mac 本地时间执行。安装前检查：
+示例默认每天 09:17 按 Mac 本地时间执行，并显式使用 `--preset previous_complete_day`。安装前检查：
 
 ~~~bash
 plutil -lint ~/Library/LaunchAgents/ai.looktech.ga4-weekly-error-report.plist
@@ -122,7 +129,7 @@ launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/ai.looktech.ga4-weekly-e
 launchctl kickstart -k gui/$(id -u)/ai.looktech.ga4-weekly-error-report
 ~~~
 
-launchd 与手动执行使用同一入口、同一配置和同一统计口径。正式启用前，必须先完成个人账号对目标 Property 的生产冒烟验证。
+launchd 与手动执行使用同一入口、同一配置和同一统计口径。正式启用前，必须先完成个人账号对目标 Property 的生产冒烟验证。Mac 在触发时间休眠时，launchd 会在机器恢复后补跑一次；它不提供服务器级可用性保证。
 
 ## 数据口径
 
@@ -133,7 +140,7 @@ launchd 与手动执行使用同一入口、同一配置和同一统计口径。
 - 原因字段默认使用 failure_reason；Translation 阻断使用 block_reason；设备媒体同步失败使用 error_source。
 - 卡片最多展示 Top 10 异常事件和每个事件 Top 3 原因。
 
-自定义参数只有注册为 GA4 事件级自定义维度后，才能通过 customEvent:* 查询，且注册不会回填历史数据。
+自定义参数只有注册为 GA4 事件级自定义维度后，才能通过 customEvent:* 查询，且注册不会回填历史数据。生产 Property 需要事件级 `failure_reason`、`block_reason` 和 `error_source`；探索表建议使用事件名称、对应原因、平台、应用版本和事件数，并保存为相对日期“昨天”。
 
 ## 报告契约
 
@@ -154,4 +161,4 @@ JSON 报告固定包含 `report_schema_version`、`rules_version`、`period`、`
 
 ## 隐私与凭证
 
-不要把 Property ID、OAuth 凭证、飞书 Webhook 或签名 Secret 提交到仓库。周报只允许正式 Schema 中的低基数原因、平台和应用版本，不得发送原始错误、堆栈、请求体、用户内容或设备标识。
+不要把 Property ID、OAuth 凭证、飞书 Webhook、签名 Secret 或包含 Property 标识的 GA4 探索表 URL 提交到仓库。报告只允许正式 Schema 中的低基数原因、平台和应用版本，不得发送原始错误、堆栈、请求体、用户内容或设备标识。

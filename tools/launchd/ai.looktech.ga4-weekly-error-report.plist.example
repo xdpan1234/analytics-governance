@@ -10,17 +10,17 @@
         <string>__SCRIPT__</string>
         <string>--config</string>
         <string>__CONFIG__</string>
+        <string>--preset</string>
+        <string>previous_complete_day</string>
     </array>
     <key>WorkingDirectory</key>
     <string>__REPOSITORY__</string>
     <key>StartCalendarInterval</key>
     <dict>
-        <key>Weekday</key>
-        <integer>1</integer>
         <key>Hour</key>
-        <integer>10</integer>
+        <integer>9</integer>
         <key>Minute</key>
-        <integer>0</integer>
+        <integer>17</integer>
     </dict>
     <key>ProcessType</key>
     <string>Background</string>

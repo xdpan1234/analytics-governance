@@ -41,7 +41,7 @@ tests/
 - Treat `analytics_schema/*.yaml` as the cross-platform machine-readable event contract.
 - Treat `docs/tracking-plan.md` as the human-readable source for event ownership, goals, privacy, and verification.
 - Treat `docs/provider-poc-playbook.md` as reference documentation only; it is not a production event source of truth.
-- Use `docs/ga4-weekly-error-report.md` to preview, configure, and schedule the local GA4 abnormal-outcome report.
+- Use `docs/ga4-weekly-error-report.md` to preview, configure, and schedule the daily local GA4 abnormal-outcome report with optional weekly or custom ranges.
 - Use `analytics_schema/report_rules.yaml` as the versioned abnormal-outcome rule list; do not infer report scope from event-name suffixes.
 - Run `ruby tools/validate_analytics_schema.rb` before implementing Android or iOS code from schema.
 - When app instrumentation is completed before governance is updated, backfill the governance contract by comparing the typed app event names with `analytics_schema/*.yaml`, then update `docs/tracking-plan.md` and run the validator.

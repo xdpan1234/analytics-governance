@@ -880,7 +880,7 @@ class Ga4WeeklyErrorReportTest(unittest.TestCase):
         self.assertIn("Feishu rejected the report", result.stderr)
         self.assertNotIn(secret, result.stderr)
 
-    def test_launchd_template_runs_the_report_every_monday_without_secrets(self):
+    def test_launchd_template_runs_the_daily_report_without_secrets(self):
         path = (
             ROOT
             / "tools"
@@ -892,11 +892,18 @@ class Ga4WeeklyErrorReportTest(unittest.TestCase):
 
         self.assertEqual(
             template["ProgramArguments"],
-            ["__PYTHON__", "__SCRIPT__", "--config", "__CONFIG__"],
+            [
+                "__PYTHON__",
+                "__SCRIPT__",
+                "--config",
+                "__CONFIG__",
+                "--preset",
+                "previous_complete_day",
+            ],
         )
         self.assertEqual(
             template["StartCalendarInterval"],
-            {"Weekday": 1, "Hour": 10, "Minute": 0},
+            {"Hour": 9, "Minute": 17},
         )
         self.assertNotIn("secret", json.dumps(template).lower())
         with feishu_server() as (webhook_url, deliveries):
@@ -929,8 +936,6 @@ class Ga4WeeklyErrorReportTest(unittest.TestCase):
                     str(ROOT / "examples" / "ga4_weekly_error_report_fixture.json"),
                     "--as-of",
                     "2026-09-01",
-                    "--preset",
-                    "previous_complete_week",
                 ]
                 with stdout_path.open("w", encoding="utf-8") as stdout, stderr_path.open(
                     "w", encoding="utf-8"
