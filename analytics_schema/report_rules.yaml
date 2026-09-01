@@ -1,4 +1,4 @@
-rules_version: "1.1"
+rules_version: "1.0"
 rules:
   - event_name: account_login_failed
     outcome_type: failed
