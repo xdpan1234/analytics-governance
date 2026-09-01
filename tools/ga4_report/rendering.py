@@ -49,14 +49,16 @@ class JsonRenderer:
 
 
 class FeishuRenderer:
-    def render(self, report: dict[str, Any]) -> dict[str, Any]:
+    def render(self, report: dict[str, Any], config: dict[str, Any] | None = None) -> dict[str, Any]:
         period = report["period"]
         comparison = report.get("comparison_period")
         summary = report["summary"]
-        title_type = "周报" if comparison and _days(period) == 7 else "报告"
-        comparison_label = ("较上周" if title_type == "周报" else "较上期") if comparison else None
-        previous_label = "上周" if title_type == "周报" else "上期"
-        overall_lines = ["**总体**"]
+        days = _days(period)
+        title_type = "日报" if days == 1 else ("周报" if days == 7 else "报告")
+        comparison_label = {"日报": "较前日", "周报": "较上周"}.get(title_type, "较上期") if comparison else None
+        previous_label = {"日报": "前日", "周报": "上周"}.get(title_type, "上期")
+        daily = title_type == "日报"
+        overall_lines = ["**📊 昨日概览**" if daily else "**总体**"]
         if comparison:
             overall_lines.extend([
                 f"异常事件：{_fmt(summary['abnormal_event_count']['value'])}（{previous_label} {_fmt(summary['abnormal_event_count']['previous'])}，{_count_change(summary['abnormal_event_count'])}）",
@@ -70,9 +72,9 @@ class FeishuRenderer:
         overall_lines.append(f"活跃用户：{_fmt(summary['active_users']['value'])}")
         if comparison:
             overall_lines.append(f"对比周期：{comparison['start_date']}～{comparison['end_date']}")
-        event_lines = ["**异常事件 Top 10**"]
+        event_lines = ["**🚨 异常事件 Top 10**" if daily else "**异常事件 Top 10**"]
         if not report["events"]:
-            event_lines.append("本周未检测到白名单业务异常事件" if title_type == "周报" else "本期未检测到白名单业务异常事件")
+            event_lines.append({"日报": "昨日未检测到白名单业务异常事件", "周报": "本周未检测到白名单业务异常事件"}.get(title_type, "本期未检测到白名单业务异常事件"))
         for index, item in enumerate(report["events"], start=1):
             line = f"{index}. `{item['event_name']}` — {_fmt(item['event_count']['value'])} 次，{_fmt(item['affected_users']['value'])} 用户"
             if comparison:
@@ -84,7 +86,7 @@ class FeishuRenderer:
                 per = item["per_1000_active_users"]
                 line += f"；每千活跃用户 {_fmt(per['value'])} 次" if per["value"] is not None else "；每千活跃用户 unavailable（活跃用户为 0）"
             event_lines.append(line)
-        reason_lines = ["**主要原因**"]
+        reason_lines = ["**🧭 主要原因**" if daily else "**主要原因**"]
         for item in report["events"]:
             reasons = item["reasons"]
             if reasons["status"] != "available":
@@ -100,24 +102,38 @@ class FeishuRenderer:
                 )
         if not report["events"]:
             reason_lines.append("本期无异常原因需要拆解")
-        quality_lines = ["**数据质量**"]
+        quality_lines = ["**🩺 数据质量**" if daily else "**数据质量**"]
         missing = report["quality"]["missing_dimensions"]
         quality_lines.append("未注册原因维度：" + "、".join(missing) if missing else "自定义原因维度均可查询")
         quality_lines.extend(dict.fromkeys(report["quality"]["warnings"]))
+        elements: list[dict[str, Any]] = [
+            {"tag": "div", "text": {"tag": "lark_md", "content": "\n".join(overall_lines)}},
+            {"tag": "hr"},
+            {"tag": "div", "text": {"tag": "lark_md", "content": "\n".join(event_lines)}},
+            {"tag": "hr"},
+            {"tag": "div", "text": {"tag": "lark_md", "content": "\n".join(reason_lines)}},
+        ]
+        report_url = _ga4_report_url(config)
+        if report_url:
+            elements.append({
+                "tag": "action",
+                "actions": [{
+                    "tag": "button",
+                    "text": {"tag": "plain_text", "content": "查看 GA4 异常明细表"},
+                    "type": "primary",
+                    "url": report_url,
+                }],
+            })
+        elements.extend([
+            {"tag": "hr"},
+            {"tag": "div", "text": {"tag": "lark_md", "content": "\n".join(quality_lines)}},
+        ])
         return {
             "msg_type": "interactive",
             "card": {
                 "config": {"wide_screen_mode": True},
-                "header": {"template": "blue", "title": {"tag": "plain_text", "content": f"GA4 业务异常{title_type}｜{period['start_date']}～{period['end_date']}"}},
-                "elements": [
-                    {"tag": "div", "text": {"tag": "lark_md", "content": "\n".join(overall_lines)}},
-                    {"tag": "hr"},
-                    {"tag": "div", "text": {"tag": "lark_md", "content": "\n".join(event_lines)}},
-                    {"tag": "hr"},
-                    {"tag": "div", "text": {"tag": "lark_md", "content": "\n".join(reason_lines)}},
-                    {"tag": "hr"},
-                    {"tag": "div", "text": {"tag": "lark_md", "content": "\n".join(quality_lines)}},
-                ],
+                "header": {"template": "orange" if daily else "blue", "title": {"tag": "plain_text", "content": f"GA4 业务异常{title_type}｜{period['start_date']}～{period['end_date']}"}},
+                "elements": elements,
             },
         }
 
@@ -251,6 +267,16 @@ def _days(period: dict[str, str]) -> int:
     from datetime import date
 
     return (date.fromisoformat(period["end_date"]) - date.fromisoformat(period["start_date"])).days + 1
+
+
+def _ga4_report_url(config: dict[str, Any] | None) -> str | None:
+    if not config or not config.get("ga4_report_url"):
+        return None
+    url = str(config["ga4_report_url"])
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme != "https" or parsed.hostname != "analytics.google.com":
+        raise ReportError("GA4 report URL must use https://analytics.google.com")
+    return url
 
 
 def feishu_webhook_url(config: dict[str, Any]) -> str:

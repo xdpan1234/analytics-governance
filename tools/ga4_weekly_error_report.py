@@ -39,7 +39,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--preview", action="store_true", help="Print the rendered payload without delivery.")
     parser.add_argument("--output", "--format", dest="output", choices=("feishu", "json", "html"), default="feishu")
     parser.add_argument("--as-of", type=date.fromisoformat, help="Date used to resolve date presets.")
-    parser.add_argument("--preset", choices=("previous_complete_week", "recent_7_complete_days"), default="previous_complete_week")
+    parser.add_argument(
+        "--preset",
+        choices=("previous_complete_day", "previous_complete_week", "recent_7_complete_days"),
+        default="previous_complete_day",
+    )
     parser.add_argument("--start-date", type=date.fromisoformat)
     parser.add_argument("--end-date", type=date.fromisoformat)
     parser.add_argument("--compare-start-date", type=date.fromisoformat)
@@ -66,12 +70,12 @@ def build_card(report_data: dict[str, Any], as_of: date) -> dict[str, Any]:
     return FeishuRenderer().render(report)
 
 
-def _render(report: dict[str, Any], output: str) -> dict[str, Any] | str:
+def _render(report: dict[str, Any], output: str, config: dict[str, Any] | None = None) -> dict[str, Any] | str:
     if output == "json":
         return JsonRenderer().render(report)
     if output == "html":
         return HtmlRenderer().render(report)
-    return FeishuRenderer().render(report)
+    return FeishuRenderer().render(report, config)
 
 
 def _print_rendered(rendered: dict[str, Any] | str) -> None:
@@ -91,7 +95,7 @@ def main() -> int:
         source = FixtureDataSource(load_fixture(args.fixture), OUTCOME_RULES) if args.fixture else Ga4DataSource(config, OUTCOME_RULES)
         facts = source.fetch(request)
         report = calculate_report(request, facts, OUTCOME_RULES, RULES_VERSION)
-        rendered = _render(report, args.output)
+        rendered = _render(report, args.output, config)
     except (ReportError, KeyError, TypeError, ValueError, AttributeError) as error:
         if config and request and args.output == "feishu" and not args.preview:
             try:
@@ -113,7 +117,7 @@ def main() -> int:
     except ReportError as error:
         print(f"error: {error}", file=sys.stderr)
         return 1
-    print("sent GA4 weekly abnormal-outcome report")
+    print("sent GA4 abnormal-outcome report")
     return 0
 
 

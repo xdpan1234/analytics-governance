@@ -172,6 +172,8 @@ class Ga4WeeklyErrorReportTest(unittest.TestCase):
                     "--preview",
                     "--as-of",
                     "2026-09-01",
+                    "--preset",
+                    "previous_complete_week",
                 ],
                 cwd=ROOT,
                 capture_output=True,
@@ -400,6 +402,8 @@ class Ga4WeeklyErrorReportTest(unittest.TestCase):
                     "--preview",
                     "--as-of",
                     "2026-09-01",
+                    "--preset",
+                    "previous_complete_week",
                 ],
                 cwd=ROOT,
                 capture_output=True,
@@ -490,6 +494,8 @@ class Ga4WeeklyErrorReportTest(unittest.TestCase):
                     "--preview",
                     "--as-of",
                     "2026-09-01",
+                    "--preset",
+                    "previous_complete_week",
                 ],
                 cwd=ROOT,
                 capture_output=True,
@@ -617,6 +623,8 @@ class Ga4WeeklyErrorReportTest(unittest.TestCase):
                         "--preview",
                         "--as-of",
                         "2026-09-01",
+                        "--preset",
+                        "previous_complete_week",
                     ],
                     cwd=ROOT,
                     capture_output=True,
@@ -707,6 +715,8 @@ class Ga4WeeklyErrorReportTest(unittest.TestCase):
                         "--preview",
                         "--as-of",
                         "2026-09-01",
+                        "--preset",
+                        "previous_complete_week",
                     ],
                     cwd=ROOT,
                     capture_output=True,
@@ -750,6 +760,8 @@ class Ga4WeeklyErrorReportTest(unittest.TestCase):
                     "--preview",
                     "--as-of",
                     "2026-09-01",
+                    "--preset",
+                    "previous_complete_week",
                 ],
                 cwd=ROOT,
                 capture_output=True,
@@ -815,6 +827,8 @@ class Ga4WeeklyErrorReportTest(unittest.TestCase):
                         str(fixture_path),
                         "--as-of",
                         "2026-09-01",
+                        "--preset",
+                        "previous_complete_week",
                     ],
                     cwd=ROOT,
                     capture_output=True,
@@ -853,6 +867,8 @@ class Ga4WeeklyErrorReportTest(unittest.TestCase):
                         str(ROOT / "examples" / "ga4_weekly_error_report_fixture.json"),
                         "--as-of",
                         "2026-09-01",
+                        "--preset",
+                        "previous_complete_week",
                     ],
                     cwd=ROOT,
                     capture_output=True,
@@ -913,6 +929,8 @@ class Ga4WeeklyErrorReportTest(unittest.TestCase):
                     str(ROOT / "examples" / "ga4_weekly_error_report_fixture.json"),
                     "--as-of",
                     "2026-09-01",
+                    "--preset",
+                    "previous_complete_week",
                 ]
                 with stdout_path.open("w", encoding="utf-8") as stdout, stderr_path.open(
                     "w", encoding="utf-8"
@@ -930,7 +948,7 @@ class Ga4WeeklyErrorReportTest(unittest.TestCase):
                 stderr = stderr_path.read_text(encoding="utf-8")
 
         self.assertEqual(result.returncode, 0, stderr)
-        self.assertEqual(stdout, "sent GA4 weekly abnormal-outcome report\n")
+        self.assertEqual(stdout, "sent GA4 abnormal-outcome report\n")
         self.assertEqual(stderr, "")
         self.assertEqual(len(deliveries), 1)
         self.assertNotIn(secret, stdout + stderr)
@@ -958,6 +976,8 @@ class Ga4WeeklyErrorReportTest(unittest.TestCase):
                         str(fixture_path),
                         "--as-of",
                         "2026-09-01",
+                        "--preset",
+                        "previous_complete_week",
                     ],
                     cwd=ROOT,
                     capture_output=True,
@@ -1018,6 +1038,8 @@ class Ga4WeeklyErrorReportTest(unittest.TestCase):
                     "--preview",
                     "--as-of",
                     "2026-09-01",
+                    "--preset",
+                    "previous_complete_week",
                 ],
                 cwd=ROOT,
                 capture_output=True,
@@ -1072,6 +1094,8 @@ class Ga4WeeklyErrorReportTest(unittest.TestCase):
                             "--preview",
                             "--as-of",
                             "2026-09-01",
+                            "--preset",
+                            "previous_complete_week",
                         ],
                         cwd=ROOT,
                         capture_output=True,

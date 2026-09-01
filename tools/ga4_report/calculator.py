@@ -76,6 +76,7 @@ def calculate_report(request: ReportRequest, facts: NormalizedFacts, rules: tupl
                     previous.active_users if previous else None,
                 ) if not rule.denominator_event else None,
                 "reasons": {
+                    "dimension": rule.reason_dimension,
                     "status": reason_status,
                     "coverage": metric(coverage, status=reason_status, numerator=sum(item.event_count for item in reasons), denominator=count) if coverage is not None else metric(None, status=reason_status, numerator=0, denominator=count),
                     "items": [

@@ -21,6 +21,11 @@ def completed_weeks(as_of: date) -> tuple[DateRange, DateRange]:
     return current, DateRange(previous_end - timedelta(days=6), previous_end)
 
 
+def previous_complete_day(as_of: date) -> DateRange:
+    day = as_of - timedelta(days=1)
+    return DateRange(day, day)
+
+
 def resolve_request(config: dict[str, Any] | None, args: Any) -> ReportRequest:
     timezone_name = config.get("report_timezone", "Asia/Shanghai") if config else "Asia/Shanghai"
     try:
@@ -34,6 +39,8 @@ def resolve_request(config: dict[str, Any] | None, args: Any) -> ReportRequest:
         report_range = DateRange(args.start_date, args.end_date)
         if report_range.end_date >= as_of:
             raise ReportError("report end date must be before as-of date")
+    elif args.preset == "previous_complete_day":
+        report_range = previous_complete_day(as_of)
     elif args.preset == "recent_7_complete_days":
         end = as_of - timedelta(days=1)
         report_range = DateRange(end - timedelta(days=6), end)
