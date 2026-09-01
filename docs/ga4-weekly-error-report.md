@@ -35,6 +35,23 @@ python3 tools/ga4_weekly_error_report.py --fixture examples/ga4_weekly_error_rep
 
 `--output json` 输出平台无关报告；`--output html` 输出一个不依赖框架的最小 HTML；省略时输出飞书卡片。`--preview` 只影响飞书投递，JSON/HTML 本身不会发送到飞书。
 
+注意：`--output html` 是静态文件渲染，不会启动 HTTP 服务，也不会自动打开浏览器。使用 `--fixture` 时不会发起任何 GA4 网络请求；使用 `>` 重定向后终端也不会显示内容。可以这样打开：
+
+~~~bash
+python3 tools/ga4_weekly_error_report.py \
+  --fixture examples/ga4_weekly_error_report_fixture.json \
+  --output html > /tmp/ga4-report.html
+open -a "Google Chrome" /tmp/ga4-report.html
+~~~
+
+如果当前环境不能使用 `open`，可在另一个终端启动本地静态服务器后访问 `http://127.0.0.1:8765/ga4-report.html`：
+
+~~~bash
+cd /tmp && python3 -m http.server 8765
+~~~
+
+要验证真实 GA4 请求，请去掉 `--fixture` 并提供 `--config`；该模式会读取 GA4 Data API，但 `--output html` 仍只生成本地 HTML，不会发送飞书。
+
 ## 3. 准备个人 OAuth
 
 承载 OAuth 的 Google Cloud Project 需要启用 Analytics Data API。目标 GA4 Property 只需给个人账号只读访问权限。
