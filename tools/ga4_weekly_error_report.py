@@ -219,6 +219,13 @@ def response_headers(response: Any) -> tuple[list[str], list[str]]:
         raise ReportError("Data API response is invalid")
     dimension_headers = response.get("dimensionHeaders")
     metric_headers = response.get("metricHeaders")
+    if dimension_headers is None and isinstance(metric_headers, list):
+        raw_rows = response.get("rows", [])
+        if isinstance(raw_rows, list) and all(
+            isinstance(row, dict) and not row.get("dimensionValues")
+            for row in raw_rows
+        ):
+            dimension_headers = []
     if not isinstance(dimension_headers, list) or not isinstance(metric_headers, list):
         raise ReportError("Data API response is missing headers")
     try:

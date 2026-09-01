@@ -32,6 +32,12 @@ def report_response(dimensions, metrics, rows):
     }
 
 
+def scalar_response(metrics, value):
+    response = report_response([], metrics, [([], [value])])
+    response.pop("dimensionHeaders")
+    return response
+
+
 @contextmanager
 def feishu_server(response=b'{"code":0}'):
     deliveries = []
@@ -100,8 +106,8 @@ class Ga4WeeklyErrorReportTest(unittest.TestCase):
                             (["account_login_completed"], [90, 70]),
                         ],
                     ),
-                    "affected_users": report_response([], ["totalUsers"], [([], [8])]),
-                    "active_users": report_response([], ["activeUsers"], [([], [1000])]),
+                    "affected_users": scalar_response(["totalUsers"], 8),
+                    "active_users": scalar_response(["activeUsers"], 1000),
                     "reasons": {
                         "customEvent:failure_reason": report_response(
                             [
@@ -146,8 +152,8 @@ class Ga4WeeklyErrorReportTest(unittest.TestCase):
                             (["account_login_completed"], [95, 75]),
                         ],
                     ),
-                    "affected_users": report_response([], ["totalUsers"], [([], [4])]),
-                    "active_users": report_response([], ["activeUsers"], [([], [800])]),
+                    "affected_users": scalar_response(["totalUsers"], 4),
+                    "active_users": scalar_response(["activeUsers"], 800),
                     "reasons": {},
                 },
             },
