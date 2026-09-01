@@ -136,17 +136,115 @@ def build_failure_card(request: ReportRequest) -> dict[str, Any]:
 
 class HtmlRenderer:
     def render(self, report: dict[str, Any]) -> str:
-        rows = "".join(
-            f"<tr><td>{escape(item['event_name'])}</td><td>{item['event_count']['value']:,}</td><td>{escape(item['outcome_type'])}</td></tr>"
-            for item in report["events"]
-        )
-        return (
-            "<!doctype html><meta charset='utf-8'><title>GA4 异常报告</title>"
-            "<h1>GA4 业务异常报告</h1>"
-            f"<p>{report['period']['start_date']}～{report['period']['end_date']}</p>"
-            "<table><thead><tr><th>事件</th><th>次数</th><th>类型</th></tr></thead>"
-            f"<tbody>{rows}</tbody></table>"
-        )
+        period = report["period"]
+        comparison = report.get("comparison_period")
+        summary = report["summary"]
+        title = "GA4 业务异常周报" if comparison and _days(period) == 7 else "GA4 业务异常报告"
+
+        def number(value: int | float | None) -> str:
+            return "—" if value is None else (f"{value:,.1f}" if isinstance(value, float) else f"{value:,}")
+
+        def change(value: dict[str, Any]) -> str:
+            if value["status"] == "new":
+                return "新出现"
+            if value["delta"] is None:
+                return "未比较"
+            return "0.0%" if value["delta"] == 0 else f"{value['delta'] * 100:+.1f}%"
+
+        def rate(value: dict[str, Any] | None, outcome_type: str) -> str:
+            if not value:
+                return "无可靠分母"
+            if value["status"] == "unavailable_zero_denominator":
+                return "不可用（分母为 0）"
+            if value["value"] is None:
+                return "不可用"
+            label = {"failed": "失败率", "blocked": "阻断率", "degraded": "降级率"}.get(outcome_type, "结果率")
+            return f"{label} {value['value'] * 100:.1f}%（{value['numerator']}/{value['denominator']}）"
+
+        def summary_card(label: str, value: dict[str, Any]) -> str:
+            previous = f"<span>上期 {number(value['previous'])}</span>" if comparison else "<span>未设置对比区间</span>"
+            return f"<article class='metric-card'><p>{escape(label)}</p><strong>{number(value['value'])}</strong><div>{previous}</div></article>"
+
+        rows: list[str] = []
+        for item in report["events"]:
+            event_count = item["event_count"]["value"] or 0
+            rows.append(
+                "<tr>"
+                f"<th scope='row'><code>{escape(item['event_name'])}</code></th>"
+                f"<td><span class='badge badge-{escape(item['outcome_type'])}'>{escape(item['outcome_type'])}</span></td>"
+                f"<td class='numeric'>{number(item['event_count']['value'])}</td>"
+                f"<td class='numeric'>{number(item['affected_users']['value'])}</td>"
+                f"<td>{escape(rate(item['rate'], item['outcome_type']))}</td>"
+                f"<td>{escape(change(item['event_count']))}</td>"
+                "</tr>"
+            )
+        if not rows:
+            rows.append("<tr><td colspan='6' class='empty'>本期未检测到白名单业务异常事件</td></tr>")
+        missing = report["quality"]["missing_dimensions"]
+        quality_items = [f"未注册原因维度：{'、'.join(escape(value) for value in missing)}"] if missing else []
+        quality_items.extend(escape(value) for value in report["quality"]["warnings"])
+        quality_html = "".join(f"<li>{value}</li>" for value in dict.fromkeys(quality_items)) or "<li class='ok'>自定义原因维度均可查询，未发现质量告警</li>"
+        comparison_text = f"对比周期：{comparison['start_date']}～{comparison['end_date']}" if comparison else "未设置对比周期"
+        reason_cards: list[str] = []
+        # Reason cards are built in the same pass as event rows to keep display order identical.
+        for item in report["events"]:
+            reasons = item["reasons"]
+            if reasons["status"] != "available":
+                reason_body = "<p class='muted'>不可用：原因维度尚未注册。</p>"
+                coverage = "不可用"
+            else:
+                event_count = item["event_count"]["value"] or 0
+                coverage_value = reasons["coverage"]["value"] or 0
+                coverage = f"{coverage_value * 100:.1f}%"
+                reason_items: list[str] = []
+                for reason in reasons["items"]:
+                    share = reason["event_count"] / event_count * 100 if event_count else 0
+                    width = max(0, min(100, share))
+                    reason_items.append(
+                        "<li>"
+                        f"<div class='reason-line'><strong>{escape(reason['reason'])}</strong><span>{reason['event_count']:,} 次 · {share:.1f}%</span></div>"
+                        f"<div class='bar' role='progressbar' aria-label='{escape(reason['reason'])} 占比' aria-valuenow='{share:.1f}' aria-valuemin='0' aria-valuemax='100'><span style='width:{width:.1f}%'></span></div>"
+                        f"<small>最高上下文：{escape(reason['platform'])} / {escape(reason['app_version'])}（{reason['context_count']:,} 次）</small>"
+                        "</li>"
+                    )
+                reason_body = "<ul class='reason-list'>" + "".join(reason_items or ["<li class='muted'>暂无已批准原因值</li>"]) + "</ul>"
+            reason_cards.append(
+                "<article class='reason-card'>"
+                f"<div class='reason-card-head'><code>{escape(item['event_name'])}</code><span>覆盖率 {coverage}</span></div>"
+                f"{reason_body}</article>"
+            )
+        return f"""<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>{escape(title)}</title>
+  <style>
+    :root {{ color-scheme: light; --ink:#172033; --muted:#667085; --line:#e5e7eb; --surface:#fff; --canvas:#f5f7fb; --blue:#2457d6; --red:#c0362c; --orange:#ad6500; --green:#137a48; }}
+    * {{ box-sizing:border-box; }} body {{ margin:0; background:var(--canvas); color:var(--ink); font:15px/1.55 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif; }}
+    main {{ max-width:1180px; margin:0 auto; padding:40px 24px 56px; }} header {{ margin-bottom:28px; }} .eyebrow {{ color:var(--blue); font-size:12px; font-weight:700; letter-spacing:.12em; text-transform:uppercase; }} h1,h2 {{ margin:0; letter-spacing:-.02em; }} h1 {{ font-size:32px; }} h2 {{ font-size:20px; margin-bottom:16px; }} .period {{ color:var(--muted); margin:8px 0 0; }}
+    section {{ margin-top:28px; }} .summary-grid {{ display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; }} .metric-card,.panel,.reason-card {{ background:var(--surface); border:1px solid var(--line); border-radius:12px; }} .metric-card {{ padding:18px 20px; }} .metric-card p {{ color:var(--muted); margin:0 0 4px; }} .metric-card strong {{ display:block; font-size:30px; letter-spacing:-.03em; }} .metric-card div {{ color:var(--muted); font-size:13px; margin-top:4px; }}
+    .panel {{ overflow:hidden; }} table {{ border-collapse:collapse; width:100%; }} th,td {{ border-bottom:1px solid var(--line); padding:13px 16px; text-align:left; vertical-align:middle; }} thead th {{ background:#f9fafb; color:var(--muted); font-size:12px; font-weight:700; }} tbody tr:last-child th,tbody tr:last-child td {{ border-bottom:0; }} .numeric {{ font-variant-numeric:tabular-nums; white-space:nowrap; }} code {{ font-family:ui-monospace,SFMono-Regular,Menlo,monospace; font-size:13px; }} .badge {{ border-radius:999px; display:inline-block; font-size:12px; padding:2px 8px; }} .badge-failed {{ background:#fdecec; color:var(--red); }} .badge-blocked {{ background:#fff4df; color:var(--orange); }} .badge-degraded {{ background:#e9f6ee; color:var(--green); }} .empty,.muted {{ color:var(--muted); }} .empty {{ padding:28px; text-align:center; }}
+    .reason-grid {{ display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }} .reason-card {{ padding:18px 20px; }} .reason-card-head,.reason-line {{ align-items:center; display:flex; justify-content:space-between; gap:12px; }} .reason-card-head {{ border-bottom:1px solid var(--line); padding-bottom:12px; }} .reason-card-head span {{ color:var(--muted); font-size:13px; }} .reason-list {{ list-style:none; margin:0; padding:8px 0 0; }} .reason-list li {{ padding:9px 0; }} .reason-line span,small {{ color:var(--muted); font-size:13px; }} .bar {{ background:#edf1f7; border-radius:4px; height:6px; margin:6px 0; overflow:hidden; }} .bar span {{ background:var(--blue); border-radius:inherit; display:block; height:100%; }}
+    .quality {{ padding:18px 20px; }} .quality ul {{ margin:0; padding-left:20px; }} .quality li {{ margin:5px 0; }} .quality .ok {{ color:var(--green); }} footer {{ color:var(--muted); font-size:12px; margin-top:28px; }}
+    @media (max-width:760px) {{ main {{ padding:28px 14px 44px; }} h1 {{ font-size:26px; }} .summary-grid,.reason-grid {{ grid-template-columns:1fr; }} .panel {{ overflow-x:auto; }} table {{ min-width:760px; }} }}
+  </style>
+</head>
+<body>
+  <main>
+    <header><div class="eyebrow">GA4 reliability</div><h1>{escape(title)}</h1><p class="period">统计周期：{escape(period['start_date'])}～{escape(period['end_date'])} · {escape(comparison_text)}</p></header>
+    <section class="summary-grid" aria-label="总体指标">
+      {summary_card("异常事件", summary["abnormal_event_count"])}
+      {summary_card("影响用户", summary["affected_users"])}
+      {summary_card("活跃用户", summary["active_users"])}
+    </section>
+    <section><h2>异常事件 Top 10</h2><div class="panel"><table><thead><tr><th scope="col">事件</th><th scope="col">类型</th><th scope="col">次数</th><th scope="col">影响用户</th><th scope="col">结果率</th><th scope="col">环比</th></tr></thead><tbody>{''.join(rows)}</tbody></table></div></section>
+    <section><h2>主要错误原因</h2><div class="reason-grid">{''.join(reason_cards) if reason_cards else '<div class="panel reason-card"><p class="muted">本期没有需要拆解的异常原因。</p></div>'}</div></section>
+    <section><h2>数据质量</h2><div class="panel quality"><ul>{quality_html}</ul></div></section>
+    <footer>report_schema_version {escape(str(report['report_schema_version']))} · rules_version {escape(str(report['rules_version']))}</footer>
+  </main>
+</body>
+</html>"""
 
 
 def _days(period: dict[str, str]) -> int:
