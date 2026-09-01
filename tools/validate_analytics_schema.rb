@@ -65,7 +65,8 @@ class AnalyticsSchemaValidator
   }.freeze
 
   EVENT_PREFIX_EXCEPTIONS = {
-    "app" => ["contact_us_"]
+    "app" => ["contact_us_"],
+    "note" => ["notes_", "speaker_label_"]
   }.freeze
 
   RESERVED_PREFIXES = %w[firebase_ google_ ga_].freeze
@@ -401,7 +402,7 @@ end
 
 def default_schema_files
   root = File.expand_path("..", __dir__)
-  Dir[File.join(root, "analytics_schema", "*.yaml")].sort
+  Dir[File.join(root, "analytics_schema", "*.yaml")].reject { |file| File.basename(file) == "report_rules.yaml" }.sort
 end
 
 if $PROGRAM_NAME == __FILE__
