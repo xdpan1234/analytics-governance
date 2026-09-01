@@ -39,12 +39,12 @@ def _rate(rule: OutcomeRule, event_count: int, outcomes: dict[str, dict[str, int
     return metric(value, numerator=event_count, denominator=denominator, previous=previous_value, delta=delta)
 
 
-def _per_thousand(value: int, active_users: int, previous: PeriodFacts | None) -> dict[str, Any]:
+def _per_thousand(value: int, active_users: int, previous_count: int | None, previous_active_users: int | None) -> dict[str, Any]:
     if not active_users:
         return metric(None, status="unavailable_zero_denominator", numerator=value, denominator=0)
     previous_value = None
-    if previous and previous.active_users:
-        previous_value = value / previous.active_users * 1000
+    if previous_count is not None and previous_active_users:
+        previous_value = previous_count / previous_active_users * 1000
     calculated = value / active_users * 1000
     return metric(calculated, numerator=value, denominator=active_users, previous=previous_value, delta=calculated - previous_value if previous_value is not None else None)
 
@@ -69,7 +69,12 @@ def calculate_report(request: ReportRequest, facts: NormalizedFacts, rules: tupl
                 "event_count": _count(count, previous_count),
                 "affected_users": _count(current_values["totalUsers"], previous.outcomes.get(rule.event_name, {}).get("totalUsers") if previous else None),
                 "rate": _rate(rule, count, current.outcomes, previous),
-                "per_1000_active_users": _per_thousand(count, current.active_users, previous) if not rule.denominator_event else None,
+                "per_1000_active_users": _per_thousand(
+                    count,
+                    current.active_users,
+                    previous.outcomes.get(rule.event_name, {}).get("eventCount") if previous else None,
+                    previous.active_users if previous else None,
+                ) if not rule.denominator_event else None,
                 "reasons": {
                     "status": reason_status,
                     "coverage": metric(coverage, status=reason_status, numerator=sum(item.event_count for item in reasons), denominator=count) if coverage is not None else metric(None, status=reason_status, numerator=0, denominator=count),
