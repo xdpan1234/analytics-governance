@@ -140,7 +140,7 @@ launchd 与手动执行使用同一入口、同一配置和同一统计口径。
 - 原因字段默认使用 failure_reason；Translation 阻断使用 block_reason；设备媒体同步失败使用 error_source。
 - 卡片最多展示 Top 10 异常事件和每个事件 Top 3 原因。
 
-自定义参数只有注册为 GA4 事件级自定义维度后，才能通过 customEvent:* 查询，且注册不会回填历史数据。生产 Property 需要事件级 `failure_reason`、`block_reason` 和 `error_source`；探索表建议使用事件名称、对应原因、平台、应用版本和事件数，并保存为相对日期“昨天”。
+自定义参数只有注册为 GA4 事件级自定义维度后，才能通过 customEvent:* 查询，且注册不会回填历史数据。生产 Property 需要事件级 `failure_reason`、`block_reason` 和 `error_source`；建议建立一个探索表，分别用“失败原因”“阻断原因”“错误来源”三个标签页展示事件名称、对应原因、平台、应用版本和事件数，并将日期保存为相对日期“昨天”。
 
 ## 报告契约
 
