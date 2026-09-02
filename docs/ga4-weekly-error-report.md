@@ -39,6 +39,8 @@ python3 tools/ga4_weekly_error_report.py --fixture examples/ga4_weekly_error_rep
 
 `--output json` 输出平台无关报告；`--output html` 输出一个不依赖框架的最小 HTML；省略时输出飞书卡片。`--preview` 只影响飞书投递，JSON/HTML 本身不会发送到飞书。
 
+HTML 使用同一份平台无关报告数据，可按异常类型和事件动态筛选。点击事件排行条形会联动刷新当前事件的原因占比、原因覆盖率、周期对比及主要平台/版本上下文；筛选状态保存在 URL 查询参数中。原因占比以当前事件总数为分母，未上报或未批准原因会显示为单独扇区，不会被隐藏后重新归一。
+
 注意：`--output html` 是静态文件渲染，不会启动 HTTP 服务，也不会自动打开浏览器。使用 `--fixture` 时不会发起任何 GA4 网络请求；使用 `>` 重定向后终端也不会显示内容。可以这样打开：
 
 ~~~bash
@@ -145,6 +147,8 @@ launchd 与手动执行使用同一入口、同一配置和同一统计口径。
 ## 报告契约
 
 JSON 报告固定包含 `report_schema_version`、`rules_version`、`period`、`comparison_period`、`summary`、`events` 和 `quality`。所有指标都使用结构化字段：
+
+`events` 保留本期所有非零异常事件及其全部已批准原因；Top 10 和 Top 3 是飞书展示层限制，不会截断 JSON 数据层或 HTML 筛选范围。
 
 ~~~json
 {

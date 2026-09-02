@@ -87,7 +87,7 @@ def calculate_report(request: ReportRequest, facts: NormalizedFacts, rules: tupl
                             "event_count": item.event_count,
                             "context_count": item.context_count,
                         }
-                        for item in reasons[:3]
+                        for item in reasons
                     ],
                 },
             }
@@ -110,7 +110,7 @@ def calculate_report(request: ReportRequest, facts: NormalizedFacts, rules: tupl
             "affected_users": _count(current.affected_users, affected_previous),
             "active_users": _count(current.active_users, active_previous),
         },
-        "events": events[:10],
+        "events": events,
         "quality": {
             "warnings": warnings,
             "missing_dimensions": sorted({rule.reason_dimension for rule in rules if rule.reason_dimension not in facts.metadata_dimensions}),
