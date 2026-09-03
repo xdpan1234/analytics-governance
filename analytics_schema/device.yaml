@@ -468,6 +468,7 @@ events:
         - permission_denied
         - timeout
         - unsupported_state
+        - device_not_connected
         - sdk_error
         - unknown
       surface:
@@ -621,6 +622,7 @@ events:
         - timeout
         - permission_denied
         - unsupported_state
+        - device_not_connected
         - sdk_error
         - unknown
       surface:
@@ -922,8 +924,12 @@ events:
       - entry_point
     allowed_values:
       failure_reason:
+        - network_error
+        - permission_denied
         - unsupported_state
+        - device_not_connected
         - validation_failed
+        - timeout
         - sdk_error
         - unknown
       surface:
@@ -1077,6 +1083,7 @@ events:
         - permission_denied
         - validation_failed
         - unsupported_state
+        - device_not_connected
         - sdk_error
         - unknown
       surface:
