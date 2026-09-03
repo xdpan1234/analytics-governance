@@ -1,0 +1,807 @@
+schema_version: 2
+owner: note
+platforms:
+  - android
+  - ios
+common_properties:
+  injected_by_adapter:
+    - platform
+    - environment
+    - build_region
+    - build_type
+    - app_version_name
+    - app_version_code
+  definitions:
+    platform: Lowercase client platform, such as android or ios.
+    environment: Analytics environment, test or prod.
+    build_region: Analytics build region. Current Android rule is prod -> us, test -> sg.
+    build_type: Client build type such as debug or release.
+    app_version_name: Public app version name injected by the client adapter.
+    app_version_code: Numeric app version code injected by the client adapter.
+implementation_contract:
+  android_contract_layer: "domain:api:analytics"
+  android_tracker: "AnalyticsTracker"
+  android_event_type: "AnalyticsEvent"
+  android_event_spec_type: "AnalyticsEventSpec"
+  android_provider_adapter: "Ga4AnalyticsAdapter"
+  android_direct_sdk_boundary: "Only the app-level provider adapter may call FirebaseAnalytics. Business, feature, domain, and data code must use typed reporters or AnalyticsTracker."
+  ios_contract_layer: "iOS analytics facade matching this schema"
+  ios_provider_adapter: "GA4/Firebase adapter behind the iOS facade"
+  ios_direct_sdk_boundary: "Only the iOS provider adapter may call Firebase Analytics.logEvent. Business code must use the facade."
+  required_tests:
+    - ga4_event_name_rules
+    - ga4_param_name_rules
+    - ga4_param_count_limit
+    - reserved_prefix_guardrails
+    - privacy_field_guardrails
+    - reporter_output_contract
+events:
+  - event_name: notes_list_viewed
+    goal: Measure Notes list entry and tag-filter usage.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User enters Notes list or changes the visible Notes tag filter. Emit once per visible list presentation/filter state.
+    trigger_ios: User enters Notes list or changes the visible Notes tag filter. Emit once per visible list presentation/filter state.
+    required_properties:
+      - entry_point
+      - surface
+      - note_filter
+    optional_properties:
+      - trigger_source
+    allowed_values:
+      entry_point: [home, notes_tab, notification, deep_link, unknown]
+      surface: [notes_list, unknown]
+      note_filter: [all, recording, memo, call, unknown]
+      trigger_source: [user, system, unknown]
+    privacy_notes: Do not include note ids, titles, transcript text, summary text, speaker names, timestamps, search text, location, or list payloads.
+    ga4_custom_definitions:
+      - entry_point
+      - surface
+      - note_filter
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - notes_entry_funnel
+      - notes_filter_usage
+    verification_android:
+      - Open Notes list and switch All, Recording, Memo, and Call filters; confirm notes_list_viewed uses approved note_filter values.
+      - Confirm no note content, ids, names, location, timestamps, or list payloads are present.
+    verification_ios:
+      - Open Notes list and switch All, Recording, Memo, and Call filters; confirm the same event name, params, and enum values as Android.
+      - Confirm no note content, ids, names, location, timestamps, or list payloads are present.
+
+  - event_name: note_detail_viewed
+    goal: Measure Notes detail opens by safe note type.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User opens one Note detail page and the detail surface becomes visible.
+    trigger_ios: User opens one Note detail page and the detail surface becomes visible.
+    required_properties:
+      - surface
+      - note_type
+    optional_properties:
+      - entry_point
+    allowed_values:
+      surface: [note_detail, unknown]
+      note_type: [recording, memo, call, unknown]
+      entry_point: [notes_list, notification, deep_link, unknown]
+    privacy_notes: Do not include note id, title, transcript, summary, speaker names, audio path, file name, contact name, location, or route payloads.
+    ga4_custom_definitions:
+      - surface
+      - note_type
+      - entry_point
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - notes_detail_open_rate
+    verification_android:
+      - Open Recording, Memo, and Call notes where available; confirm note_detail_viewed uses approved note_type values.
+      - Confirm no note content, ids, names, file names, contact names, or location fields are present.
+    verification_ios:
+      - Open equivalent Note details and confirm the same event name, params, enum values, and privacy boundary as Android.
+      - Confirm no note content, ids, names, file names, contact names, or location fields are present.
+
+  - event_name: note_recording_started
+    goal: Measure accepted Notes recording starts.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: A Notes recording start request is accepted and a local recording draft/session is created.
+    trigger_ios: A Notes recording start request is accepted and a local recording draft/session is created.
+    required_properties:
+      - surface
+      - recording_source
+    optional_properties:
+      - note_type
+    allowed_values:
+      surface: [note_recording, notes_list, unknown]
+      recording_source: [app_record_button, glasses_shortcut, auto_call_recording, unknown]
+      note_type: [recording, memo, call, unknown]
+    privacy_notes: Do not include audio path, audio content, file name, contact name, phone number, location, or raw recording metadata.
+    ga4_custom_definitions:
+      - surface
+      - recording_source
+      - note_type
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - notes_recording_funnel
+    verification_android:
+      - Start a Notes recording and confirm note_recording_started appears only after the start is accepted.
+      - Confirm no audio path, file name, contact, phone, location, or raw metadata is present.
+    verification_ios:
+      - Start a Notes recording and confirm the same event name, params, enum values, and start boundary as Android.
+      - Confirm no audio path, file name, contact, phone, location, or raw metadata is present.
+
+  - event_name: note_recording_completed
+    goal: Measure Notes recordings that finalize into upload or processing.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: A started Notes recording stops successfully and finalization proceeds.
+    trigger_ios: A started Notes recording stops successfully and finalization proceeds.
+    required_properties:
+      - surface
+      - recording_source
+      - note_type
+    optional_properties: []
+    allowed_values:
+      surface: [note_recording, background, unknown]
+      recording_source: [app_record_button, glasses_shortcut, auto_call_recording, unknown]
+      note_type: [recording, memo, call, unknown]
+    privacy_notes: Do not include audio content, audio path, duration, file name, contact name, location, transcript, or summary.
+    ga4_custom_definitions:
+      - surface
+      - recording_source
+      - note_type
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - notes_recording_funnel
+    verification_android:
+      - Stop a recording successfully and confirm note_recording_completed fires after the stop/finalize boundary.
+      - Confirm no audio path, duration, file name, contact, location, transcript, or summary is present.
+    verification_ios:
+      - Stop a recording successfully and confirm the same event name, params, enum values, and finalize boundary as Android.
+      - Confirm no audio path, duration, file name, contact, location, transcript, or summary is present.
+
+  - event_name: note_recording_failed
+    goal: Measure Notes recording failures by safe reason.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: A Notes recording start, stop, or finalization attempt fails before successful finalization.
+    trigger_ios: A Notes recording start, stop, or finalization attempt fails before successful finalization.
+    required_properties:
+      - failure_reason
+      - surface
+      - recording_source
+    optional_properties:
+      - note_type
+    allowed_values:
+      failure_reason: [permission_denied, device_disconnected, file_missing, sdk_error, unsupported_state, user_cancelled, unknown]
+      surface: [note_recording, background, unknown]
+      recording_source: [app_record_button, glasses_shortcut, auto_call_recording, unknown]
+      note_type: [recording, memo, call, unknown]
+    privacy_notes: Do not include raw exception messages, audio path, file name, contact name, phone number, location, request id, response body, or stack trace.
+    ga4_custom_definitions:
+      - failure_reason
+      - surface
+      - recording_source
+      - note_type
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - notes_recording_failure_breakdown
+    verification_android:
+      - Simulate permission, device, and unsupported-state failures; confirm note_recording_failed uses approved failure_reason values.
+      - Confirm no raw errors, paths, file names, contacts, phone numbers, location, request ids, response bodies, or stack traces are present.
+    verification_ios:
+      - Simulate equivalent failures and confirm the same event name, params, enum values, and privacy boundary as Android.
+      - Confirm no raw errors, paths, file names, contacts, phone numbers, location, request ids, response bodies, or stack traces are present.
+
+  - event_name: note_import_started
+    goal: Measure accepted audio import attempts into Notes.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User or system submits an audio file into Notes import and validation starts.
+    trigger_ios: User or system submits an audio file into Notes import and validation starts.
+    required_properties:
+      - surface
+      - import_source
+    optional_properties:
+      - note_type
+    allowed_values:
+      surface: [note_import, notes_list, share_sheet, unknown]
+      import_source: [system_share, file_picker, manual_retry, recovered_task, unknown]
+      note_type: [recording, memo, call, unknown]
+    privacy_notes: Do not include source app, file name, file path, mime detail beyond approved enum, audio content, note id, or share payload.
+    ga4_custom_definitions:
+      - surface
+      - import_source
+      - note_type
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - notes_import_funnel
+    verification_android:
+      - Import audio from an approved entry and confirm note_import_started fires after the import attempt is accepted.
+      - Confirm no source app, file name, file path, audio content, note id, or share payload is present.
+    verification_ios:
+      - Import audio from the equivalent iOS entry and confirm the same event name, params, enum values, and acceptance boundary as Android.
+      - Confirm no source app, file name, file path, audio content, note id, or share payload is present.
+
+  - event_name: note_import_completed
+    goal: Measure imported audio that becomes a local Note.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Imported audio passes validation and a local Note is created or queued.
+    trigger_ios: Imported audio passes validation and a local Note is created or queued.
+    required_properties:
+      - surface
+      - import_source
+      - note_type
+    optional_properties: []
+    allowed_values:
+      surface: [note_import, background, unknown]
+      import_source: [system_share, file_picker, manual_retry, recovered_task, unknown]
+      note_type: [recording, memo, call, unknown]
+    privacy_notes: Do not include note id, file name, file path, source app, duration, audio content, transcript, summary, or location.
+    ga4_custom_definitions:
+      - surface
+      - import_source
+      - note_type
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - notes_import_funnel
+    verification_android:
+      - Complete an import and confirm note_import_completed fires only after a local Note is accepted.
+      - Confirm no note id, file name, path, source app, duration, audio content, transcript, summary, or location is present.
+    verification_ios:
+      - Complete an equivalent import and confirm the same event name, params, enum values, and success boundary as Android.
+      - Confirm no note id, file name, path, source app, duration, audio content, transcript, summary, or location is present.
+
+  - event_name: note_import_failed
+    goal: Measure Notes import failures by safe reason.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Imported audio is rejected or import fails before a local Note is accepted.
+    trigger_ios: Imported audio is rejected or import fails before a local Note is accepted.
+    required_properties:
+      - failure_reason
+      - surface
+      - import_source
+    optional_properties:
+      - note_type
+    allowed_values:
+      failure_reason: [validation_failed, file_too_large, file_too_short, unsupported_format, permission_denied, file_missing, sdk_error, unknown]
+      surface: [note_import, share_sheet, unknown]
+      import_source: [system_share, file_picker, manual_retry, recovered_task, unknown]
+      note_type: [recording, memo, call, unknown]
+    privacy_notes: Do not include raw validation text, file name, file path, source app, audio content, note id, raw exception, request id, response body, or stack trace.
+    ga4_custom_definitions:
+      - failure_reason
+      - surface
+      - import_source
+      - note_type
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - notes_import_failure_breakdown
+    verification_android:
+      - Simulate file size, format, permission, and missing-file failures; confirm note_import_failed uses approved values.
+      - Confirm no raw validation text, file names, paths, source app, audio content, ids, raw errors, request ids, response bodies, or stack traces are present.
+    verification_ios:
+      - Simulate equivalent failures and confirm the same event name, params, enum values, and privacy boundary as Android.
+      - Confirm no raw validation text, file names, paths, source app, audio content, ids, raw errors, request ids, response bodies, or stack traces are present.
+
+  - event_name: note_processing_completed
+    goal: Measure successful server or local Notes processing outcomes.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: A Note processing state reaches a successful transcript, summary, or speaker-label result.
+    trigger_ios: A Note processing state reaches a successful transcript, summary, or speaker-label result.
+    required_properties:
+      - surface
+      - note_type
+      - processing_type
+    optional_properties:
+      - generation_type
+    allowed_values:
+      surface: [note_detail, background, unknown]
+      note_type: [recording, memo, call, unknown]
+      processing_type: [transcript, summary, speaker_label, unknown]
+      generation_type: [summary, transcript, reminder, unknown]
+    privacy_notes: Do not include transcript text, summary text, speaker names, note id, audio path, file name, raw server payload, or location.
+    ga4_custom_definitions:
+      - surface
+      - note_type
+      - processing_type
+      - generation_type
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - notes_processing_success_rate
+    verification_android:
+      - Complete transcript or summary processing and confirm note_processing_completed fires at the accepted success boundary.
+      - Confirm no transcript, summary, speaker name, id, path, file name, raw payload, or location is present.
+    verification_ios:
+      - Complete equivalent processing and confirm the same event name, params, enum values, and success boundary as Android.
+      - Confirm no transcript, summary, speaker name, id, path, file name, raw payload, or location is present.
+
+  - event_name: note_processing_failed
+    goal: Measure Notes processing failures by safe reason.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: A Note transcript, summary, or speaker-label processing attempt reaches a failed or blocked terminal state.
+    trigger_ios: A Note transcript, summary, or speaker-label processing attempt reaches a failed or blocked terminal state.
+    required_properties:
+      - failure_reason
+      - surface
+      - note_type
+      - processing_type
+    optional_properties:
+      - generation_type
+    allowed_values:
+      failure_reason: [network_error, timeout, unauthorized, unsupported_state, sdk_error, unknown]
+      surface: [note_detail, background, unknown]
+      note_type: [recording, memo, call, unknown]
+      processing_type: [transcript, summary, speaker_label, unknown]
+      generation_type: [summary, transcript, reminder, unknown]
+    privacy_notes: Do not include raw server error, transcript text, summary text, speaker names, note id, request id, response body, or stack trace.
+    ga4_custom_definitions:
+      - failure_reason
+      - surface
+      - note_type
+      - processing_type
+      - generation_type
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - notes_processing_failure_breakdown
+    verification_android:
+      - Simulate processing failure and confirm note_processing_failed uses approved failure_reason and processing_type values.
+      - Confirm no raw server errors, content, names, ids, request ids, response bodies, or stack traces are present.
+    verification_ios:
+      - Simulate equivalent processing failures and confirm the same event name, params, enum values, and privacy boundary as Android.
+      - Confirm no raw server errors, content, names, ids, request ids, response bodies, or stack traces are present.
+
+  - event_name: note_generation_submitted
+    goal: Measure user-submitted Notes generation requests.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User taps Generate or Re-generate and the request is accepted for processing.
+    trigger_ios: User taps Generate or Re-generate and the request is accepted for processing.
+    required_properties:
+      - surface
+      - note_type
+      - generation_type
+    optional_properties:
+      - trigger_source
+    allowed_values:
+      surface: [note_detail, unknown]
+      note_type: [recording, memo, call, unknown]
+      generation_type: [summary, transcript, reminder, unknown]
+      trigger_source: [user, system, unknown]
+    privacy_notes: Do not include generation prompt text, transcript, summary, note id, server payload, raw error, or route payload.
+    ga4_custom_definitions:
+      - surface
+      - note_type
+      - generation_type
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - notes_generation_requests
+    verification_android:
+      - Submit Generate and Re-generate where available; confirm note_generation_submitted fires after the request is accepted.
+      - Confirm no prompt, transcript, summary, note id, server payload, raw error, or route payload is present.
+    verification_ios:
+      - Submit equivalent generation requests and confirm the same event name, params, enum values, and acceptance boundary as Android.
+      - Confirm no prompt, transcript, summary, note id, server payload, raw error, or route payload is present.
+
+  - event_name: notes_setting_viewed
+    goal: Measure entry volume into Notes settings.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User opens Notes settings and the settings surface becomes visible.
+    trigger_ios: User opens Notes settings and the settings surface becomes visible.
+    required_properties:
+      - surface
+    optional_properties:
+      - entry_point
+    allowed_values:
+      surface: [notes_settings, unknown]
+      entry_point: [settings, notes_list, unknown]
+    privacy_notes: Do not include language labels, raw locale strings, account ids, device ids, or local preference payloads.
+    ga4_custom_definitions:
+      - surface
+      - entry_point
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - notes_settings_usage
+    verification_android:
+      - Open Notes settings and confirm notes_setting_viewed fires once per screen presentation.
+      - Confirm no language labels, raw locales, ids, or preference payloads are present.
+    verification_ios:
+      - Open Notes settings and confirm the same event name, params, enum values, and privacy boundary as Android.
+      - Confirm no language labels, raw locales, ids, or preference payloads are present.
+
+  - event_name: notes_setting_updated
+    goal: Measure successful Notes setting changes.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User changes a Notes setting and the new value is accepted/persisted.
+    trigger_ios: User changes a Notes setting and the new value is accepted/persisted.
+    required_properties:
+      - surface
+      - setting_type
+    optional_properties:
+      - toggle_state
+    allowed_values:
+      surface: [notes_settings, unknown]
+      setting_type: [transcription_language, summary_language, auto_summary, auto_call_recording, unknown]
+      toggle_state: [on, off, unknown]
+    privacy_notes: Language selections must use setting_type only here. Do not include language labels, raw locale strings, previous values, new values, account ids, or preference payloads.
+    ga4_custom_definitions:
+      - surface
+      - setting_type
+      - toggle_state
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - notes_settings_usage
+    verification_android:
+      - Change each supported Notes setting and confirm notes_setting_updated fires only after persistence is accepted.
+      - Confirm no language labels, raw locales, previous values, new values, ids, or preference payloads are present.
+    verification_ios:
+      - Change equivalent settings and confirm the same event name, params, enum values, and success boundary as Android.
+      - Confirm no language labels, raw locales, previous values, new values, ids, or preference payloads are present.
+
+  - event_name: notes_setting_failed
+    goal: Measure Notes setting save failures by safe reason.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: A Notes setting change is rejected, fails to persist, or rolls back.
+    trigger_ios: A Notes setting change is rejected, fails to persist, or rolls back.
+    required_properties:
+      - failure_reason
+      - surface
+      - setting_type
+    optional_properties:
+      - toggle_state
+    allowed_values:
+      failure_reason: [validation_failed, network_error, timeout, unauthorized, unsupported_state, sdk_error, unknown]
+      surface: [notes_settings, unknown]
+      setting_type: [transcription_language, summary_language, auto_summary, auto_call_recording, unknown]
+      toggle_state: [on, off, unknown]
+    privacy_notes: Do not include raw validation text, language labels, raw locale strings, previous values, new values, account ids, request id, response body, or stack trace.
+    ga4_custom_definitions:
+      - failure_reason
+      - surface
+      - setting_type
+      - toggle_state
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - notes_settings_failure_breakdown
+    verification_android:
+      - Simulate a Notes setting save failure and confirm notes_setting_failed uses approved failure_reason values.
+      - Confirm no raw validation text, language labels, raw locales, values, ids, request ids, response bodies, or stack traces are present.
+    verification_ios:
+      - Simulate equivalent setting failures and confirm the same event name, params, enum values, and privacy boundary as Android.
+      - Confirm no raw validation text, language labels, raw locales, values, ids, request ids, response bodies, or stack traces are present.
+
+  - event_name: note_export_started
+    goal: Measure user-started Notes export or share attempts.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User starts an export/share action for a Note and the request is accepted.
+    trigger_ios: User starts an export/share action for a Note and the request is accepted.
+    required_properties:
+      - surface
+      - note_type
+      - export_type
+    optional_properties: []
+    allowed_values:
+      surface: [note_detail, share_sheet, unknown]
+      note_type: [recording, memo, call, unknown]
+      export_type: [audio, transcript, summary, pdf, text, share, unknown]
+    privacy_notes: Do not include exported content, share target, file name, file path, note id, transcript, summary, speaker names, or contact names.
+    ga4_custom_definitions:
+      - surface
+      - note_type
+      - export_type
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - notes_export_funnel
+    verification_android:
+      - Start each supported export/share action and confirm note_export_started fires after the request is accepted.
+      - Confirm no exported content, share target, file name, path, ids, transcript, summary, speaker, or contact names are present.
+    verification_ios:
+      - Start equivalent export/share actions and confirm the same event name, params, enum values, and acceptance boundary as Android.
+      - Confirm no exported content, share target, file name, path, ids, transcript, summary, speaker, or contact names are present.
+
+  - event_name: note_export_completed
+    goal: Measure completed Notes export or share preparation.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Notes export/share preparation succeeds and the share sheet or saved artifact is available.
+    trigger_ios: Notes export/share preparation succeeds and the share sheet or saved artifact is available.
+    required_properties:
+      - surface
+      - note_type
+      - export_type
+    optional_properties: []
+    allowed_values:
+      surface: [note_detail, share_sheet, unknown]
+      note_type: [recording, memo, call, unknown]
+      export_type: [audio, transcript, summary, pdf, text, share, unknown]
+    privacy_notes: Do not include exported content, share target, file name, file path, note id, transcript, summary, speaker names, or contact names.
+    ga4_custom_definitions:
+      - surface
+      - note_type
+      - export_type
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - notes_export_funnel
+    verification_android:
+      - Complete export/share preparation and confirm note_export_completed fires after success.
+      - Confirm no exported content, share target, file name, path, ids, transcript, summary, speaker, or contact names are present.
+    verification_ios:
+      - Complete equivalent export/share preparation and confirm the same event name, params, enum values, and success boundary as Android.
+      - Confirm no exported content, share target, file name, path, ids, transcript, summary, speaker, or contact names are present.
+
+  - event_name: note_export_failed
+    goal: Measure Notes export/share failures by safe reason.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Notes export/share preparation or share sheet presentation fails before success.
+    trigger_ios: Notes export/share preparation or share sheet presentation fails before success.
+    required_properties:
+      - failure_reason
+      - surface
+      - note_type
+      - export_type
+    optional_properties: []
+    allowed_values:
+      failure_reason: [file_missing, permission_denied, sdk_error, unsupported_state, unknown]
+      surface: [note_detail, share_sheet, unknown]
+      note_type: [recording, memo, call, unknown]
+      export_type: [audio, transcript, summary, pdf, text, share, unknown]
+    privacy_notes: Do not include exported content, share target, file name, file path, note id, raw exception, request id, response body, or stack trace.
+    ga4_custom_definitions:
+      - failure_reason
+      - surface
+      - note_type
+      - export_type
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - notes_export_failure_breakdown
+    verification_android:
+      - Simulate export/share failure and confirm note_export_failed uses approved failure_reason values.
+      - Confirm no exported content, share target, file name, path, ids, raw errors, request ids, response bodies, or stack traces are present.
+    verification_ios:
+      - Simulate equivalent export/share failures and confirm the same event name, params, enum values, and privacy boundary as Android.
+      - Confirm no exported content, share target, file name, path, ids, raw errors, request ids, response bodies, or stack traces are present.
+
+  - event_name: note_deleted
+    goal: Measure accepted Notes deletion actions.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User confirms single or batch deletion and the delete operation completes successfully.
+    trigger_ios: User confirms single or batch deletion and the delete operation completes successfully.
+    required_properties:
+      - surface
+      - note_type
+      - delete_scope
+    optional_properties: []
+    allowed_values:
+      surface: [notes_list, note_detail, unknown]
+      note_type: [recording, memo, call, mixed, unknown]
+      delete_scope: [single, batch, unknown]
+    privacy_notes: Do not include deleted note ids, titles, transcript, summary, speaker names, audio paths, file names, contact names, or location.
+    ga4_custom_definitions:
+      - surface
+      - note_type
+      - delete_scope
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - notes_delete_usage
+    verification_android:
+      - Delete one Note and multiple Notes; confirm note_deleted fires after successful deletion with correct delete_scope.
+      - Confirm no deleted ids, titles, content, speaker names, paths, file names, contact names, or location are present.
+    verification_ios:
+      - Delete equivalent Notes and confirm the same event name, params, enum values, and success boundary as Android.
+      - Confirm no deleted ids, titles, content, speaker names, paths, file names, contact names, or location are present.
+
+  - event_name: note_delete_failed
+    goal: Measure Notes deletion failures by safe reason.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User-confirmed single or batch deletion fails or rolls back before success.
+    trigger_ios: User-confirmed single or batch deletion fails or rolls back before success.
+    required_properties:
+      - failure_reason
+      - surface
+      - note_type
+      - delete_scope
+    optional_properties: []
+    allowed_values:
+      failure_reason: [network_error, timeout, unauthorized, file_missing, sdk_error, unsupported_state, unknown]
+      surface: [notes_list, note_detail, unknown]
+      note_type: [recording, memo, call, mixed, unknown]
+      delete_scope: [single, batch, unknown]
+    privacy_notes: Do not include note ids, titles, transcript, summary, speaker names, audio paths, file names, contact names, raw server error, request id, response body, or stack trace.
+    ga4_custom_definitions:
+      - failure_reason
+      - surface
+      - note_type
+      - delete_scope
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - notes_delete_failure_breakdown
+    verification_android:
+      - Simulate delete failure and confirm note_delete_failed uses approved failure_reason and delete_scope values.
+      - Confirm no ids, titles, content, speaker names, paths, file names, contacts, raw errors, request ids, response bodies, or stack traces are present.
+    verification_ios:
+      - Simulate equivalent delete failures and confirm the same event name, params, enum values, and privacy boundary as Android.
+      - Confirm no ids, titles, content, speaker names, paths, file names, contacts, raw errors, request ids, response bodies, or stack traces are present.
+
+  - event_name: note_summary_version_selected
+    goal: Measure user selection among generated Note summary versions.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User selects a generated summary version and the selected version becomes visible.
+    trigger_ios: User selects a generated summary version and the selected version becomes visible.
+    required_properties:
+      - surface
+      - note_type
+      - version_count_bucket
+    optional_properties:
+      - generation_type
+    allowed_values:
+      surface: [note_detail, unknown]
+      note_type: [recording, memo, call, unknown]
+      version_count_bucket: [one, two_to_five, six_to_twenty, more_than_twenty, unknown]
+      generation_type: [summary, unknown]
+    privacy_notes: Do not include summary text, version id, note id, prompt text, transcript, speaker names, timestamps, or raw payloads.
+    ga4_custom_definitions:
+      - surface
+      - note_type
+      - version_count_bucket
+      - generation_type
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - notes_summary_version_usage
+    verification_android:
+      - Select a summary version and confirm note_summary_version_selected uses a bucket instead of a raw version id/count.
+      - Confirm no summary text, version id, note id, prompt, transcript, speaker names, timestamps, or raw payloads are present.
+    verification_ios:
+      - Select an equivalent summary version and confirm the same event name, params, enum values, and privacy boundary as Android.
+      - Confirm no summary text, version id, note id, prompt, transcript, speaker names, timestamps, or raw payloads are present.
+
+  - event_name: note_speaker_label_evaluated
+    goal: Measure when speaker-label status is evaluated for a Note.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Note detail evaluates whether speaker labels are available, pending, or blocked.
+    trigger_ios: Note detail evaluates whether speaker labels are available, pending, or blocked.
+    required_properties:
+      - surface
+      - note_type
+    optional_properties:
+      - trigger_source
+    allowed_values:
+      surface: [note_detail, unknown]
+      note_type: [recording, memo, call, unknown]
+      trigger_source: [user, system, unknown]
+    privacy_notes: Do not include speaker names, transcript text, note id, summary text, raw speaker map, or server payloads.
+    ga4_custom_definitions:
+      - surface
+      - note_type
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - notes_speaker_label_usage
+    verification_android:
+      - Open a Note detail with speaker labels and confirm note_speaker_label_evaluated fires without speaker names or map payloads.
+      - Confirm no content, ids, names, raw maps, or server payloads are present.
+    verification_ios:
+      - Open an equivalent Note detail and confirm the same event name, params, enum values, and privacy boundary as Android.
+      - Confirm no content, ids, names, raw maps, or server payloads are present.
+
+  - event_name: note_speaker_label_completed
+    goal: Measure successful speaker-label save or completion.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Speaker label generation or rename reaches an accepted successful result.
+    trigger_ios: Speaker label generation or rename reaches an accepted successful result.
+    required_properties:
+      - surface
+      - note_type
+    optional_properties:
+      - trigger_source
+    allowed_values:
+      surface: [note_detail, unknown]
+      note_type: [recording, memo, call, unknown]
+      trigger_source: [user, system, unknown]
+    privacy_notes: Do not include speaker names, transcript text, note id, summary text, raw speaker map, previous value, new value, or server payloads.
+    ga4_custom_definitions:
+      - surface
+      - note_type
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - notes_speaker_label_success_rate
+    verification_android:
+      - Complete speaker-label generation or rename and confirm note_speaker_label_completed fires after success.
+      - Confirm no content, ids, speaker names, previous/new values, raw maps, or server payloads are present.
+    verification_ios:
+      - Complete equivalent speaker-label actions and confirm the same event name, params, enum values, and success boundary as Android.
+      - Confirm no content, ids, speaker names, previous/new values, raw maps, or server payloads are present.
+
+  - event_name: note_speaker_label_blocked
+    goal: Measure blocked or failed speaker-label attempts by safe reason.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Speaker-label generation or rename is blocked, fails, or rolls back before success.
+    trigger_ios: Speaker-label generation or rename is blocked, fails, or rolls back before success.
+    required_properties:
+      - failure_reason
+      - surface
+      - note_type
+    optional_properties:
+      - trigger_source
+    allowed_values:
+      failure_reason: [network_error, timeout, unauthorized, unsupported_state, sdk_error, unknown]
+      surface: [note_detail, unknown]
+      note_type: [recording, memo, call, unknown]
+      trigger_source: [user, system, unknown]
+    privacy_notes: Do not include speaker names, transcript text, note id, raw speaker map, raw server error, request id, response body, or stack trace.
+    ga4_custom_definitions:
+      - failure_reason
+      - surface
+      - note_type
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - notes_speaker_label_failure_breakdown
+    verification_android:
+      - Simulate speaker-label failure and confirm note_speaker_label_blocked uses approved failure_reason values.
+      - Confirm no content, ids, speaker names, raw maps, raw errors, request ids, response bodies, or stack traces are present.
+    verification_ios:
+      - Simulate equivalent speaker-label failures and confirm the same event name, params, enum values, and privacy boundary as Android.
+      - Confirm no content, ids, speaker names, raw maps, raw errors, request ids, response bodies, or stack traces are present.

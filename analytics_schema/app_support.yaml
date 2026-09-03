@@ -1,0 +1,219 @@
+schema_version: 2
+owner: app
+platforms:
+  - android
+  - ios
+common_properties:
+  injected_by_adapter:
+    - platform
+    - environment
+    - build_region
+    - build_type
+    - app_version_name
+    - app_version_code
+  definitions:
+    platform: Lowercase client platform, such as android or ios.
+    environment: Analytics environment, test or prod.
+    build_region: Analytics build region. Current Android rule is prod -> us, test -> sg.
+    build_type: Client build type such as debug or release.
+    app_version_name: Public app version name injected by the client adapter.
+    app_version_code: Numeric app version code injected by the client adapter.
+implementation_contract:
+  android_contract_layer: "domain:api:analytics"
+  android_tracker: "AnalyticsTracker"
+  android_event_type: "AnalyticsEvent"
+  android_event_spec_type: "AnalyticsEventSpec"
+  android_provider_adapter: "Ga4AnalyticsAdapter"
+  android_direct_sdk_boundary: "Only the app-level provider adapter may call FirebaseAnalytics. Business, feature, domain, and data code must use typed reporters or AnalyticsTracker."
+  ios_contract_layer: "iOS analytics facade matching this schema"
+  ios_provider_adapter: "GA4/Firebase adapter behind the iOS facade"
+  ios_direct_sdk_boundary: "Only the iOS provider adapter may call Firebase Analytics.logEvent. Business code must use the facade."
+  required_tests:
+    - ga4_event_name_rules
+    - ga4_param_name_rules
+    - ga4_param_count_limit
+    - reserved_prefix_guardrails
+    - privacy_field_guardrails
+    - reporter_output_contract
+events:
+  - event_name: contact_us_started
+    goal: Measure entry volume into the formal Contact us support flow.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User taps Contact us and the support request or pre-upload flow starts.
+    trigger_ios: User taps Contact us and the support request or pre-upload flow starts.
+    required_properties:
+      - entry_point
+      - surface
+    optional_properties:
+      - trigger_source
+    allowed_values:
+      entry_point:
+        - settings
+        - notification
+        - unknown
+      surface:
+        - settings
+        - support
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+    privacy_notes: Do not include userid, Intercom conversation id, raw chat text, attachment names, report contents, log contents, or pre-upload payloads.
+    ga4_custom_definitions:
+      - entry_point
+      - surface
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - app_support_health
+      - contact_us_entry_funnel
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Tap Contact us from Settings and confirm contact_us_started appears once with platform=android.
+      - Confirm entry_point and surface use approved enum values and no support payload is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Tap Contact us from Settings and confirm contact_us_started appears once with platform=ios.
+      - Confirm entry_point and surface use approved enum values and no support payload is present.
+
+  - event_name: contact_us_opened
+    goal: Measure successful Intercom composer opens when there is no unread support reply.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Current account has no unread support reply and the Intercom composer opens successfully.
+    trigger_ios: Current account has no unread support reply and the Intercom composer opens successfully.
+    required_properties:
+      - entry_point
+      - surface
+    optional_properties:
+      - trigger_source
+    allowed_values:
+      entry_point:
+        - settings
+        - notification
+        - unknown
+      surface:
+        - settings
+        - support
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+    privacy_notes: Do not include conversation body, attachment names, Intercom conversation id, userid, report contents, or message text.
+    ga4_custom_definitions:
+      - entry_point
+      - surface
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - app_support_health
+      - contact_us_open_success
+      - contact_us_entry_funnel
+    verification_android:
+      - Open Contact us with no unread reply on Android.
+      - Confirm contact_us_opened appears with platform=android and no conversation id or message text.
+    verification_ios:
+      - Open Contact us with no unread reply on iOS.
+      - Confirm contact_us_opened appears with platform=ios and no conversation id or message text.
+
+  - event_name: contact_us_reply_opened
+    goal: Measure users entering Contact us from an unread support reply state.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User taps Contact us while the settings row has an unread support reply indicator and the Intercom Messenger default entry opens successfully.
+    trigger_ios: User taps Contact us while the settings row has an unread support reply indicator and the Intercom Messenger default entry opens successfully.
+    required_properties:
+      - entry_point
+      - surface
+    optional_properties:
+      - trigger_source
+    allowed_values:
+      entry_point:
+        - settings
+        - notification
+        - unknown
+      surface:
+        - settings
+        - support
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+    privacy_notes: Do not include unread conversation contents, conversation id, message body, attachment names, userid, or support report contents.
+    ga4_custom_definitions:
+      - entry_point
+      - surface
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - app_support_health
+      - contact_us_unread_reply_entry
+      - contact_us_entry_funnel
+    verification_android:
+      - Open Contact us from an unread reply indicator on Android.
+      - Confirm contact_us_reply_opened appears with platform=android and no conversation content.
+    verification_ios:
+      - Open Contact us from an unread reply indicator on iOS.
+      - Confirm contact_us_reply_opened appears with platform=ios and no conversation content.
+
+  - event_name: contact_us_failed
+    goal: Measure Contact us failures before the support chat window opens.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Support chat window fails before opening because of network, permission, authorization, configuration, or SDK failure.
+    trigger_ios: Support chat window fails before opening because of network, permission, authorization, configuration, or SDK failure.
+    required_properties:
+      - failure_reason
+      - entry_point
+      - surface
+    optional_properties:
+      - trigger_source
+    allowed_values:
+      failure_reason:
+        - network_error
+        - timeout
+        - permission_denied
+        - unauthorized
+        - unsupported_state
+        - sdk_error
+      entry_point:
+        - settings
+        - notification
+        - unknown
+      surface:
+        - settings
+        - support
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+    privacy_notes: Do not include raw errors, raw exception messages, stack traces, chat text, report contents, attachment names, log contents, userid, or Intercom conversation id.
+    ga4_custom_definitions:
+      - failure_reason
+      - entry_point
+      - surface
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - app_support_health
+      - contact_us_failure_breakdown
+      - contact_us_entry_funnel
+    verification_android:
+      - Simulate network failure, missing configuration, authorization failure, or SDK open failure on Android.
+      - Confirm contact_us_failed appears with an approved failure_reason and no raw error or support payload.
+    verification_ios:
+      - Simulate network failure, missing configuration, authorization failure, or SDK open failure on iOS.
+      - Confirm contact_us_failed appears with an approved failure_reason and no raw error or support payload.

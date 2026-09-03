@@ -1,0 +1,358 @@
+schema_version: 2
+owner: app
+platforms:
+  - android
+  - ios
+common_properties:
+  injected_by_adapter:
+    - platform
+    - environment
+    - build_region
+    - build_type
+    - app_version_name
+    - app_version_code
+  definitions:
+    platform: Lowercase client platform, such as android or ios.
+    environment: Analytics environment, test or prod.
+    build_region: Analytics build region. Current Android rule is prod -> us, test -> sg.
+    build_type: Client build type such as debug or release.
+    app_version_name: Public app version name injected by the client adapter.
+    app_version_code: Numeric app version code injected by the client adapter.
+implementation_contract:
+  android_contract_layer: "domain:api:analytics"
+  android_tracker: "AnalyticsTracker"
+  android_event_type: "AnalyticsEvent"
+  android_event_spec_type: "AnalyticsEventSpec"
+  android_provider_adapter: "Ga4AnalyticsAdapter"
+  android_direct_sdk_boundary: "Only the app-level provider adapter may call FirebaseAnalytics. Business, feature, domain, and data code must use typed reporters or AnalyticsTracker."
+  ios_contract_layer: "iOS analytics facade matching this schema"
+  ios_provider_adapter: "GA4/Firebase adapter behind the iOS facade"
+  ios_direct_sdk_boundary: "Only the iOS provider adapter may call Firebase Analytics.logEvent. Business code must use the facade."
+  required_tests:
+    - ga4_event_name_rules
+    - ga4_param_name_rules
+    - ga4_param_count_limit
+    - reserved_prefix_guardrails
+    - privacy_field_guardrails
+    - reporter_output_contract
+events:
+  - event_name: app_boot_started
+    goal: Confirm that the app process reached startup instrumentation.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Cold-start initialization begins after analytics can safely emit.
+    trigger_ios: Cold-start initialization begins after analytics can safely emit.
+    required_properties: []
+    optional_properties: []
+    allowed_values: {}
+    privacy_notes: No PII. Do not include user identifiers, device serial numbers, or raw URLs.
+    ga4_custom_definitions: []
+    dashboard_usage:
+      - startup_health
+      - boot_completion_funnel
+    verification_android:
+      - Verify in GA4 DebugView with platform=android.
+      - Confirm event appears before app_boot_completed in a cold start.
+    verification_ios:
+      - Verify in GA4 DebugView with platform=ios.
+      - Confirm event appears before app_boot_completed in a cold start.
+
+  - event_name: app_boot_completed
+    goal: Confirm that base initialization completed and the user can enter a usable app state.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: End of app-level startup after required app services are ready.
+    trigger_ios: End of app-level startup after required app services are ready.
+    required_properties: []
+    optional_properties: []
+    allowed_values: {}
+    privacy_notes: No PII. Use booleans or low-cardinality enums only.
+    ga4_custom_definitions:
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - startup_health
+      - boot_completion_funnel
+      - app_boot_event_report
+    verification_android:
+      - Verify in GA4 DebugView with platform=android.
+      - Confirm Reports can split by platform, environment, and build_region.
+    verification_ios:
+      - Verify in GA4 DebugView with platform=ios.
+      - Confirm Reports can split by platform, environment, and build_region.
+
+  - event_name: app_boot_degraded
+    goal: Record non-fatal startup degradation when the app continues into a usable state.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: A caught startup failure does not crash app startup but degrades initialization.
+    trigger_ios: A caught startup failure does not crash app startup but degrades initialization.
+    required_properties:
+      - failure_reason
+      - degraded_component
+    optional_properties:
+      - entry_point
+      - surface
+      - trigger_source
+    allowed_values:
+      failure_reason:
+        - network_error
+        - permission_denied
+        - validation_failed
+        - timeout
+        - unsupported_state
+        - sdk_error
+      degraded_component:
+        - auth_state_restore
+        - unknown
+    privacy_notes: Do not include raw exception messages, URLs, tokens, user identifiers, or stack traces.
+    ga4_custom_definitions:
+      - failure_reason
+      - degraded_component
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - startup_health
+      - degradation_breakdown
+    verification_android:
+      - Trigger or simulate a non-fatal startup failure and verify DebugView.
+      - Confirm failure_reason and degraded_component are visible as event properties.
+    verification_ios:
+      - Trigger or simulate a non-fatal startup failure and verify DebugView.
+      - Confirm failure_reason and degraded_component are visible as event properties.
+
+  - event_name: app_legal_link_opened
+    goal: Measure successful entry into formal help, terms, privacy, and instruction links.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User taps a formal explanation link from login, settings, home, or chat context and the open action is accepted.
+    trigger_ios: User taps a formal explanation link from login, settings, home, or chat context and the open action is accepted.
+    required_properties:
+      - entry_point
+      - surface
+    optional_properties:
+      - trigger_source
+    allowed_values:
+      entry_point:
+        - login
+        - settings
+        - chat_tab
+        - home
+        - unknown
+      surface:
+        - login
+        - settings
+        - chat
+        - home
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+    privacy_notes: Do not include full URLs, link text, browser error details, tokens, or user identifiers.
+    ga4_custom_definitions:
+      - entry_point
+      - surface
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - app_basic_health
+      - legal_link_usage
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Tap a help, terms, privacy, or instruction link and confirm app_legal_link_opened appears once with platform=android.
+      - Confirm entry_point and surface use approved enum values and no full URL is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Tap a help, terms, privacy, or instruction link and confirm app_legal_link_opened appears once with platform=ios.
+      - Confirm entry_point and surface use approved enum values and no full URL is present.
+
+  - event_name: app_legal_link_open_failed
+    goal: Measure failure volume when formal explanation links cannot be opened.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: A formal explanation link open attempt fails and the user remains in the current context.
+    trigger_ios: A formal explanation link open attempt fails and the user remains in the current context.
+    required_properties:
+      - failure_reason
+      - surface
+    optional_properties:
+      - entry_point
+    allowed_values:
+      failure_reason:
+        - network_error
+        - permission_denied
+        - validation_failed
+        - timeout
+        - unsupported_state
+        - sdk_error
+      surface:
+        - login
+        - settings
+        - chat
+        - home
+        - unknown
+      entry_point:
+        - login
+        - settings
+        - chat_tab
+        - home
+        - unknown
+    privacy_notes: Do not include full URLs, browser error details, raw exception messages, tokens, or stack traces.
+    ga4_custom_definitions:
+      - failure_reason
+      - surface
+      - entry_point
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - app_basic_health
+      - legal_link_failure_breakdown
+    verification_android:
+      - Simulate an invalid link or unavailable browser on Android.
+      - Confirm app_legal_link_open_failed appears with an approved failure_reason and no raw browser error.
+    verification_ios:
+      - Simulate an invalid link or unavailable browser on iOS.
+      - Confirm app_legal_link_open_failed appears with an approved failure_reason and no raw browser error.
+
+  - event_name: app_version_notice_viewed
+    goal: Measure exposure volume for normal version notices.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: A normal version notice matches and is shown to the user as a dialog or page.
+    trigger_ios: A normal version notice matches and is shown to the user as a dialog or page.
+    required_properties:
+      - entry_point
+      - surface
+    optional_properties:
+      - trigger_source
+    allowed_values:
+      entry_point:
+        - login
+        - settings
+        - home
+        - unknown
+      surface:
+        - application
+        - login
+        - settings
+        - home
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - server_push
+        - unknown
+    privacy_notes: Do not include version notice body text, remote config payloads, raw URLs, or user identifiers.
+    ga4_custom_definitions:
+      - entry_point
+      - surface
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - app_basic_health
+      - version_notice_exposure
+    verification_android:
+      - Use an account or config state with an unread version notice on Android.
+      - Confirm app_version_notice_viewed appears once when the notice is shown and no notice body text is present.
+    verification_ios:
+      - Use an account or config state with an unread version notice on iOS.
+      - Confirm app_version_notice_viewed appears once when the notice is shown and no notice body text is present.
+
+  - event_name: app_language_fallback_applied
+    goal: Measure successful fallback when the selected main language or Notes language has no exact match.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Main language or Notes language selection has no exact match and successfully falls back to an available result.
+    trigger_ios: Main language or Notes language selection has no exact match and successfully falls back to an available result.
+    required_properties:
+      - surface
+      - trigger_source
+    optional_properties:
+      - entry_point
+    allowed_values:
+      surface:
+        - application
+        - settings
+        - notes
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+      entry_point:
+        - settings
+        - notes
+        - home
+        - unknown
+    privacy_notes: Do not include raw language candidate lists, raw locale strings, or fallback error text.
+    ga4_custom_definitions:
+      - surface
+      - trigger_source
+      - entry_point
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - app_basic_health
+      - language_fallback_monitoring
+    verification_android:
+      - Select or simulate a language state with no exact match on Android.
+      - Confirm app_language_fallback_applied appears with platform=android and approved surface/trigger_source values.
+    verification_ios:
+      - Select or simulate a language state with no exact match on iOS.
+      - Confirm app_language_fallback_applied appears with platform=ios and approved surface/trigger_source values.
+
+  - event_name: app_language_fallback_blocked
+    goal: Measure blocking cases where language fallback has no available result.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Language selection or fallback cannot produce an available result and stays in a failure state.
+    trigger_ios: Language selection or fallback cannot produce an available result and stays in a failure state.
+    required_properties:
+      - failure_reason
+      - surface
+    optional_properties:
+      - entry_point
+    allowed_values:
+      failure_reason:
+        - network_error
+        - permission_denied
+        - validation_failed
+        - timeout
+        - unsupported_state
+        - sdk_error
+      surface:
+        - application
+        - settings
+        - notes
+        - unknown
+      entry_point:
+        - settings
+        - notes
+        - home
+        - unknown
+    privacy_notes: Do not include raw language candidate lists, raw locale strings, full error copy, raw exception messages, or stack traces.
+    ga4_custom_definitions:
+      - failure_reason
+      - surface
+      - entry_point
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - app_basic_health
+      - language_fallback_failure_breakdown
+    verification_android:
+      - Simulate no available language fallback result on Android.
+      - Confirm app_language_fallback_blocked appears with an approved failure_reason and no full error copy.
+    verification_ios:
+      - Simulate no available language fallback result on iOS.
+      - Confirm app_language_fallback_blocked appears with an approved failure_reason and no full error copy.

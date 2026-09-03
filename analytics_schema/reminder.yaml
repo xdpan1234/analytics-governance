@@ -1,0 +1,463 @@
+schema_version: 2
+owner: reminder
+platforms:
+  - android
+  - ios
+common_properties:
+  injected_by_adapter:
+    - platform
+    - environment
+    - build_region
+    - build_type
+    - app_version_name
+    - app_version_code
+  definitions:
+    platform: Lowercase client platform, such as android or ios.
+    environment: Analytics environment, test or prod.
+    build_region: Analytics build region. Current Android rule is prod -> us, test -> sg.
+    build_type: Client build type such as debug or release.
+    app_version_name: Public app version name injected by the client adapter.
+    app_version_code: Numeric app version code injected by the client adapter.
+implementation_contract:
+  android_contract_layer: "domain:api:analytics"
+  android_tracker: "AnalyticsTracker"
+  android_event_type: "AnalyticsEvent"
+  android_event_spec_type: "AnalyticsEventSpec"
+  android_provider_adapter: "Ga4AnalyticsAdapter"
+  android_direct_sdk_boundary: "Only the app-level provider adapter may call FirebaseAnalytics. Business, feature, domain, and data code must use typed reporters or AnalyticsTracker."
+  ios_contract_layer: "iOS analytics facade matching this schema"
+  ios_provider_adapter: "GA4/Firebase adapter behind the iOS facade"
+  ios_direct_sdk_boundary: "Only the iOS provider adapter may call Firebase Analytics.logEvent. Business code must use the facade."
+  required_tests:
+    - ga4_event_name_rules
+    - ga4_param_name_rules
+    - ga4_param_count_limit
+    - reserved_prefix_guardrails
+    - privacy_field_guardrails
+    - reporter_output_contract
+events:
+  - event_name: reminder_list_viewed
+    goal: Measure formal Reminder list entry volume.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User enters the formal Reminder list screen from Home, a due Reminder card, notification, or another approved Reminder entry. Emit at most once per screen presentation.
+    trigger_ios: User enters the formal Reminder list screen from Home, a due Reminder card, notification, or another approved Reminder entry. Emit at most once per screen presentation.
+    required_properties:
+      - entry_point
+      - surface
+    optional_properties:
+      - trigger_source
+    allowed_values:
+      entry_point:
+        - home
+        - notification
+        - unknown
+      surface:
+        - reminder
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+    privacy_notes: Do not include reminder id, title, body, due time, route name, raw notification payload, or any reminder content.
+    ga4_custom_definitions:
+      - entry_point
+      - surface
+      - trigger_source
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - reminder_entry_funnel
+      - reminder_list_entry_volume
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Enter the Reminder list from Home and from a due Reminder card; confirm reminder_list_viewed appears once per screen presentation.
+      - Confirm entry_point, surface, and trigger_source use approved enum values.
+      - Confirm no reminder id, title, body, due time, route name, raw notification payload, or reminder content is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Enter the Reminder list from equivalent iOS entry points; confirm reminder_list_viewed appears once per screen presentation.
+      - Confirm iOS uses the same event name, params, enum values, and privacy boundary as Android.
+
+  - event_name: reminder_saved
+    goal: Measure successful formal Reminder create, edit, completion, reactivation, and delete results.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: A formal Reminder create, edit, complete, reactivate, or delete operation reaches its accepted success boundary. Do not emit for optimistic UI state before the repository or server result is accepted.
+    trigger_ios: A formal Reminder create, edit, complete, reactivate, or delete operation reaches its accepted success boundary. Do not emit for optimistic UI state before the repository or server result is accepted.
+    required_properties:
+      - surface
+      - trigger_source
+    optional_properties:
+      - entry_point
+      - action_type
+    allowed_values:
+      surface:
+        - reminder
+        - unknown
+      trigger_source:
+        - user
+        - system
+        - unknown
+      entry_point:
+        - home
+        - notification
+        - unknown
+      action_type:
+        - create
+        - edit
+        - complete
+        - reactivate
+        - delete
+        - unknown
+    privacy_notes: Do not include reminder id, title, body, previous value, new value, due time, time zone, or raw server response. The create action only represents formal Reminder creation; voice-created reminders are not a formal v1 analytics object.
+    ga4_custom_definitions:
+      - surface
+      - trigger_source
+      - entry_point
+      - action_type
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - reminder_save_success_rate
+      - reminder_management_actions
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Create, edit, complete, reactivate, and delete a formal Reminder where supported; confirm reminder_saved appears only after the success boundary.
+      - Confirm action_type uses an approved enum value.
+      - Confirm voice-created reminders do not emit create unless the App has a formal Reminder creation save boundary approved by this schema.
+      - Confirm no reminder id, title, body, due time, previous value, new value, or raw response is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Verify the same successful Reminder management actions with the same event name, params, enum values, and success boundary as Android.
+      - Confirm no Reminder content or raw response is present.
+
+  - event_name: reminder_save_failed
+    goal: Measure formal Reminder save, status, and delete failures by low-cardinality reason.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: A formal Reminder create, edit, complete, reactivate, or delete operation fails, is blocked by validation, or rolls back before a successful accepted result.
+    trigger_ios: A formal Reminder create, edit, complete, reactivate, or delete operation fails, is blocked by validation, or rolls back before a successful accepted result.
+    required_properties:
+      - failure_reason
+      - surface
+    optional_properties:
+      - action_type
+      - entry_point
+    allowed_values:
+      failure_reason:
+        - validation_failed
+        - network_error
+        - timeout
+        - unauthorized
+        - sdk_error
+        - unsupported_state
+        - unknown
+      surface:
+        - reminder
+        - unknown
+      action_type:
+        - create
+        - edit
+        - complete
+        - reactivate
+        - delete
+        - unknown
+      entry_point:
+        - home
+        - notification
+        - unknown
+    privacy_notes: Do not include reminder id, title, body, previous value, new value, due time, raw validation text, raw server error, raw exception message, request id, response body, or stack trace.
+    ga4_custom_definitions:
+      - failure_reason
+      - surface
+      - action_type
+      - entry_point
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - reminder_save_failure_breakdown
+      - reminder_save_success_rate
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Simulate empty-title validation, network failure, unauthorized failure, timeout, and delete or update rollback where possible.
+      - Confirm reminder_save_failed appears with an approved failure_reason and action_type.
+      - Confirm no reminder content, raw server error, request id, response body, or stack trace is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Simulate equivalent failure states and confirm iOS maps them to the same failure_reason values as Android.
+      - Confirm no Reminder content or raw error is present.
+
+  - event_name: reminder_due_card_viewed
+    goal: Measure exposure of formal due Reminder cards on Home.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Home displays a formal due Reminder card in the notification area. Emit once per card opportunity per Home screen presentation, not on every recomposition or list refresh.
+    trigger_ios: Home displays a formal due Reminder card in the notification area. Emit once per card opportunity per Home screen presentation, not on every UI refresh.
+    required_properties:
+      - surface
+      - trigger_source
+    optional_properties:
+      - entry_point
+    allowed_values:
+      surface:
+        - home
+        - unknown
+      trigger_source:
+        - system
+        - unknown
+      entry_point:
+        - home
+        - unknown
+    privacy_notes: Do not include reminder id, title, body, due time, card text, list position, or count of due reminders.
+    ga4_custom_definitions:
+      - surface
+      - trigger_source
+      - entry_point
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - reminder_due_card_funnel
+      - reminder_due_card_exposure
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Create or sync a due Reminder and open Home; confirm reminder_due_card_viewed appears when the card is visible.
+      - Confirm recomposition, refresh, or scrolling does not over-count the same card opportunity within one Home screen presentation.
+      - Confirm no reminder id, title, body, due time, card text, or due count is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Verify due Reminder card exposure uses the same event name, params, enum values, and de-duplication boundary as Android.
+      - Confirm no Reminder content or due time is present.
+
+  - event_name: reminder_due_card_opened
+    goal: Measure users who continue from a Home due Reminder card into Reminder handling.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User taps a Home due Reminder card and navigation to the Reminder list or formal Reminder handling screen is requested.
+    trigger_ios: User taps a Home due Reminder card and navigation to the Reminder list or formal Reminder handling screen is requested.
+    required_properties:
+      - surface
+      - trigger_source
+    optional_properties:
+      - entry_point
+    allowed_values:
+      surface:
+        - home
+        - unknown
+      trigger_source:
+        - user
+        - unknown
+      entry_point:
+        - home
+        - unknown
+    privacy_notes: Do not include reminder id, title, body, due time, card text, or navigation route name.
+    ga4_custom_definitions:
+      - surface
+      - trigger_source
+      - entry_point
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - reminder_due_card_funnel
+      - reminder_due_card_open_rate
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Tap a visible due Reminder card and confirm reminder_due_card_opened appears once with trigger_source=user.
+      - Confirm navigation failure or blocked navigation is not reported as a successful open unless the App formally accepts the navigation request.
+      - Confirm no reminder content, due time, or route name is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Tap a visible due Reminder card and confirm iOS emits the same event name, params, enum values, and privacy boundary as Android.
+
+  - event_name: reminder_due_card_dismissed
+    goal: Measure users who close a Home due Reminder card without entering the Reminder list from that card.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: User closes a Home due Reminder card and the dismiss action is accepted locally or by the Reminder store.
+    trigger_ios: User closes a Home due Reminder card and the dismiss action is accepted locally or by the Reminder store.
+    required_properties:
+      - surface
+      - trigger_source
+    optional_properties:
+      - entry_point
+    allowed_values:
+      surface:
+        - home
+        - unknown
+      trigger_source:
+        - user
+        - unknown
+      entry_point:
+        - home
+        - unknown
+    privacy_notes: Do not include reminder id, title, body, due time, card text, raw dismiss error, or stack trace.
+    ga4_custom_definitions:
+      - surface
+      - trigger_source
+      - entry_point
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - reminder_due_card_funnel
+      - reminder_due_card_dismiss_rate
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Close a visible due Reminder card and confirm reminder_due_card_dismissed appears after the dismiss action is accepted.
+      - Confirm the same dismiss does not also emit reminder_due_card_opened.
+      - Confirm no reminder content, due time, raw dismiss error, or stack trace is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Close a visible due Reminder card and confirm iOS emits the same event name, params, enum values, and privacy boundary as Android.
+
+  - event_name: reminder_alert_triggered
+    goal: Measure formal due Reminder alert trigger volume across local notification and server playback chains.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: A formal due Reminder triggers an accepted local notification path or server-push playback chain, such as the Reminder lifecycle notification-sent event. Do not emit for draft reminders or non-formal voice creation.
+    trigger_ios: A formal due Reminder triggers an accepted local notification path or server-push playback chain. Do not emit for draft reminders or non-formal voice creation.
+    required_properties:
+      - trigger_source
+      - surface
+    optional_properties:
+      - entry_point
+      - alert_mode
+    allowed_values:
+      trigger_source:
+        - server_push
+        - system
+        - unknown
+      surface:
+        - background
+        - reminder
+        - unknown
+      entry_point:
+        - background
+        - notification
+        - unknown
+      alert_mode:
+        - local_notification
+        - server_push
+        - unknown
+    privacy_notes: Do not include reminder id, title, body, due time, notification body, audio url, audio path, raw push payload, request id, raw error, or stack trace.
+    ga4_custom_definitions:
+      - trigger_source
+      - surface
+      - entry_point
+      - alert_mode
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - reminder_alert_volume
+      - reminder_alert_to_playback_funnel
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Trigger a formal due Reminder through reminder_lifecycle notification-sent and confirm reminder_alert_triggered appears with trigger_source=server_push and alert_mode=server_push.
+      - Confirm local notification trigger paths use alert_mode=local_notification when implemented.
+      - Confirm no reminder content, due time, audio url/path, raw push payload, request id, raw error, or stack trace is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Trigger the equivalent iOS due Reminder alert path and confirm iOS emits the same event name, params, enum values, and privacy boundary as Android.
+
+  - event_name: reminder_playback_started
+    goal: Measure due Reminder audio playback starts after the alert chain reaches an actual playback boundary.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Due Reminder audio actually starts playback, such as MediaPlayer start succeeding after preparation and output gating. Do not emit when audio is merely enqueued or prepared.
+    trigger_ios: Due Reminder audio actually starts playback after the alert chain reaches the iOS player start boundary. Do not emit when audio is merely enqueued or prepared.
+    required_properties:
+      - surface
+      - trigger_source
+    optional_properties:
+      - alert_mode
+    allowed_values:
+      surface:
+        - background
+        - reminder
+        - unknown
+      trigger_source:
+        - server_push
+        - system
+        - unknown
+      alert_mode:
+        - audio
+        - unknown
+    privacy_notes: Do not include reminder id, title, body, due time, audio url, audio path, audio file name, playback source url, raw player state, raw duration, or stack trace.
+    ga4_custom_definitions:
+      - surface
+      - trigger_source
+      - alert_mode
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - reminder_alert_to_playback_funnel
+      - reminder_playback_start_rate
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Trigger a due Reminder while the glasses audio output is available; confirm reminder_playback_started appears only after audio playback actually starts.
+      - Confirm enqueue, cache hit, prepare, or audio focus request alone does not emit reminder_playback_started.
+      - Confirm no reminder content, audio url/path/file name, raw player state, raw duration, or stack trace is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Trigger due Reminder playback and confirm iOS emits the same event name, params, enum values, and actual-playback boundary as Android.
+
+  - event_name: reminder_playback_failed
+    goal: Measure due Reminder audio playback failures by low-cardinality reason.
+    recommended_or_custom: custom
+    key_event: false
+    trigger_android: Due Reminder audio cannot play because the audio asset is missing, glasses audio is disconnected, the player cannot prepare or start, or another approved playback failure occurs before a successful start.
+    trigger_ios: Due Reminder audio cannot play because the audio asset is missing, output is unavailable, the player cannot prepare or start, or another approved playback failure occurs before a successful start.
+    required_properties:
+      - failure_reason
+      - surface
+    optional_properties:
+      - alert_mode
+      - entry_point
+    allowed_values:
+      failure_reason:
+        - device_disconnected
+        - file_missing
+        - network_error
+        - timeout
+        - sdk_error
+        - unsupported_state
+        - unknown
+      surface:
+        - background
+        - reminder
+        - unknown
+      alert_mode:
+        - audio
+        - unknown
+      entry_point:
+        - background
+        - notification
+        - unknown
+    privacy_notes: Do not include reminder id, title, body, due time, audio url, audio path, audio file name, playback source url, raw player state, raw error code, raw exception message, or stack trace.
+    ga4_custom_definitions:
+      - failure_reason
+      - surface
+      - alert_mode
+      - entry_point
+      - platform
+      - environment
+      - build_region
+    dashboard_usage:
+      - reminder_playback_failure_breakdown
+      - reminder_alert_to_playback_funnel
+    verification_android:
+      - Enable GA4 DebugView for the Android app stream.
+      - Trigger playback with missing audio, disconnected A2DP, player prepare failure, and player start failure where possible.
+      - Confirm reminder_playback_failed appears with an approved failure_reason and does not also emit reminder_playback_started for the same failed attempt.
+      - Confirm no reminder content, audio url/path/file name, playback source url, raw player state, raw error code, raw exception, or stack trace is present.
+    verification_ios:
+      - Enable GA4 DebugView for the iOS app stream.
+      - Simulate equivalent playback failures and confirm iOS maps them to the same failure_reason values as Android.
+      - Confirm no Reminder content, audio path/url/file name, raw player state, raw error, or stack trace is present.
