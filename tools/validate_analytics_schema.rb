@@ -65,7 +65,8 @@ class AnalyticsSchemaValidator
   }.freeze
 
   EVENT_PREFIX_EXCEPTIONS = {
-    "app" => ["contact_us_"]
+    "app" => ["contact_us_"],
+    "note" => ["notes_", "speaker_label_"]
   }.freeze
 
   RESERVED_PREFIXES = %w[firebase_ google_ ga_].freeze
