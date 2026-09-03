@@ -1,0 +1,162 @@
+rules_version: "1.0"
+rules:
+  - event_name: account_login_failed
+    outcome_type: failed
+    denominator_event: account_login_completed
+    reason_dimension: customEvent:failure_reason
+  - event_name: account_data_control_failed
+    outcome_type: failed
+    denominator_event: account_data_control_completed
+    reason_dimension: customEvent:failure_reason
+  - event_name: account_username_rule_blocked
+    outcome_type: blocked
+    denominator_event: account_username_rule_evaluated
+    reason_dimension: customEvent:failure_reason
+  - event_name: account_auth_state_invalidated
+    outcome_type: invalidated
+    denominator_event: null
+    reason_dimension: customEvent:failure_reason
+  - event_name: app_boot_degraded
+    outcome_type: degraded
+    denominator_event: app_boot_completed
+    reason_dimension: customEvent:failure_reason
+  - event_name: app_legal_link_open_failed
+    outcome_type: failed
+    denominator_event: app_legal_link_opened
+    reason_dimension: customEvent:failure_reason
+  - event_name: app_language_fallback_blocked
+    outcome_type: blocked
+    denominator_event: null
+    reason_dimension: customEvent:failure_reason
+  - event_name: contact_us_failed
+    outcome_type: failed
+    denominator_event: contact_us_opened
+    reason_dimension: customEvent:failure_reason
+  - event_name: chat_response_failed
+    outcome_type: failed
+    denominator_event: chat_response_completed
+    reason_dimension: customEvent:failure_reason
+  - event_name: chat_voice_start_failed
+    outcome_type: failed
+    denominator_event: chat_voice_started
+    reason_dimension: customEvent:failure_reason
+  - event_name: device_entry_blocked
+    outcome_type: blocked
+    denominator_event: null
+    reason_dimension: customEvent:failure_reason
+  - event_name: device_binding_failed
+    outcome_type: failed
+    denominator_event: device_binding_completed
+    reason_dimension: customEvent:failure_reason
+  - event_name: device_setting_update_failed
+    outcome_type: failed
+    denominator_event: device_setting_updated
+    reason_dimension: customEvent:failure_reason
+  - event_name: device_sync_failed
+    outcome_type: failed
+    denominator_event: device_sync_completed
+    reason_dimension: customEvent:failure_reason
+  - event_name: device_reconnect_failed
+    outcome_type: failed
+    denominator_event: device_reconnect_completed
+    reason_dimension: customEvent:failure_reason
+  - event_name: device_version_gate_blocked
+    outcome_type: blocked
+    denominator_event: device_version_gate_evaluated
+    reason_dimension: customEvent:failure_reason
+  - event_name: device_ota_failed
+    outcome_type: failed
+    denominator_event: device_ota_completed
+    reason_dimension: customEvent:failure_reason
+  - event_name: device_usage_photo_capture_failed
+    outcome_type: failed
+    denominator_event: device_usage_photo_capture_succeeded
+    reason_dimension: customEvent:failure_reason
+  - event_name: device_usage_video_record_failed
+    outcome_type: failed
+    denominator_event: device_usage_video_record_ended
+    reason_dimension: customEvent:failure_reason
+  - event_name: device_usage_audio_record_failed
+    outcome_type: failed
+    denominator_event: device_usage_audio_record_ended
+    reason_dimension: customEvent:failure_reason
+  - event_name: device_usage_ai_chat_failed
+    outcome_type: failed
+    denominator_event: device_usage_ai_chat_ended
+    reason_dimension: customEvent:failure_reason
+  - event_name: device_usage_media_sync_failed
+    outcome_type: failed
+    denominator_event: null
+    reason_dimension: customEvent:error_source
+  - event_name: media_import_degraded
+    outcome_type: degraded
+    denominator_event: media_import_completed
+    reason_dimension: customEvent:failure_reason
+  - event_name: media_import_failed
+    outcome_type: failed
+    denominator_event: media_import_completed
+    reason_dimension: customEvent:failure_reason
+  - event_name: media_import_blocked
+    outcome_type: blocked
+    denominator_event: null
+    reason_dimension: customEvent:failure_reason
+  - event_name: media_action_failed
+    outcome_type: failed
+    denominator_event: null
+    reason_dimension: customEvent:failure_reason
+  - event_name: media_playback_failed
+    outcome_type: failed
+    denominator_event: media_playback_started
+    reason_dimension: customEvent:failure_reason
+  - event_name: media_horizon_export_failed
+    outcome_type: failed
+    denominator_event: null
+    reason_dimension: customEvent:failure_reason
+  - event_name: note_recording_failed
+    outcome_type: failed
+    denominator_event: note_recording_completed
+    reason_dimension: customEvent:failure_reason
+  - event_name: note_import_failed
+    outcome_type: failed
+    denominator_event: note_import_completed
+    reason_dimension: customEvent:failure_reason
+  - event_name: note_processing_failed
+    outcome_type: failed
+    denominator_event: note_processing_completed
+    reason_dimension: customEvent:failure_reason
+  - event_name: notes_setting_failed
+    outcome_type: failed
+    denominator_event: notes_setting_updated
+    reason_dimension: customEvent:failure_reason
+  - event_name: note_export_failed
+    outcome_type: failed
+    denominator_event: note_export_completed
+    reason_dimension: customEvent:failure_reason
+  - event_name: note_delete_failed
+    outcome_type: failed
+    denominator_event: note_deleted
+    reason_dimension: customEvent:failure_reason
+  - event_name: note_speaker_label_blocked
+    outcome_type: blocked
+    denominator_event: note_speaker_label_evaluated
+    reason_dimension: customEvent:failure_reason
+  - event_name: reminder_save_failed
+    outcome_type: failed
+    denominator_event: reminder_saved
+    reason_dimension: customEvent:failure_reason
+  - event_name: reminder_playback_failed
+    outcome_type: failed
+    denominator_event: reminder_playback_started
+    reason_dimension: customEvent:failure_reason
+  - event_name: translation_blocked
+    outcome_type: blocked
+    denominator_event: null
+    reason_dimension: customEvent:block_reason
+  - event_name: translation_session_failed
+    outcome_type: failed
+    denominator_event: translation_session_completed
+    reason_dimension: customEvent:failure_reason
+  - event_name: tutorial_help_link_open_failed
+    outcome_type: failed
+    denominator_event: tutorial_help_link_opened
+    reason_dimension: customEvent:failure_reason

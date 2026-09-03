@@ -8,6 +8,7 @@ Shared governance assets for production analytics instrumentation across Android
 skills/
   ga4-analytics-instrumentation/
 analytics_schema/
+  report_rules.yaml
   account.yaml
   app_basic.yaml
   app_support.yaml
@@ -18,10 +19,20 @@ analytics_schema/
 docs/
   tracking-plan.md
   provider-poc-playbook.md
+  ga4-weekly-error-report.md
 tools/
   validate_analytics_schema.rb
+  ga4_weekly_error_report.py
+  ga4_report/
+    contracts.py       # 日期与报告指标契约
+    request.py         # 动态区间解析
+    rules.py           # 版本化规则加载与 Schema 校验
+    data.py            # GA4/fixture 数据源适配器
+    calculator.py      # 平台无关统计计算
+    rendering.py       # JSON/Feishu/HTML 渲染与 Feishu 投递
 tests/
   validate_analytics_schema_test.rb
+  test_ga4_weekly_error_report.py
 ```
 
 ## How To Use
@@ -30,6 +41,8 @@ tests/
 - Treat `analytics_schema/*.yaml` as the cross-platform machine-readable event contract.
 - Treat `docs/tracking-plan.md` as the human-readable source for event ownership, goals, privacy, and verification.
 - Treat `docs/provider-poc-playbook.md` as reference documentation only; it is not a production event source of truth.
+- Use `docs/ga4-weekly-error-report.md` to preview, configure, and schedule the daily local GA4 abnormal-outcome report with optional weekly or custom ranges.
+- Use `analytics_schema/report_rules.yaml` as the versioned abnormal-outcome rule list; do not infer report scope from event-name suffixes.
 - Run `ruby tools/validate_analytics_schema.rb` before implementing Android or iOS code from schema.
 - When app instrumentation is completed before governance is updated, backfill the governance contract by comparing the typed app event names with `analytics_schema/*.yaml`, then update `docs/tracking-plan.md` and run the validator.
 - `device_usage_*` is part of the Device owner contract and stays in `analytics_schema/device.yaml`; do not create a separate `device_usage.yaml` for the current prefix taxonomy.

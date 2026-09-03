@@ -2,6 +2,8 @@
 
 This directory is the machine-readable contract for shared Android and iOS production analytics events. Keep it aligned with `docs/tracking-plan.md` and the platform typed analytics contracts.
 
+`report_rules.yaml` is the separate, versioned reporting rule list. It is consumed by the GA4 report tool and intentionally excluded from the event-schema validator because it is not an instrumentation module schema.
+
 ## Schema Version 2
 
 Every active YAML schema must use this top-level shape:
