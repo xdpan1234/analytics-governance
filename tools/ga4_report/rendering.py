@@ -4,6 +4,7 @@ import base64
 import hashlib
 import hmac
 import json
+import subprocess
 import time
 import urllib.error
 import urllib.parse
@@ -88,18 +89,24 @@ class FeishuRenderer:
                 line += f"；每千活跃用户 {_fmt(per['value'])} 次" if per["value"] is not None else "；每千活跃用户 unavailable（活跃用户为 0）"
             event_lines.append(line)
         reason_lines = ["**🧭 主要原因**" if daily else "**主要原因**"]
-        for item in events:
+        for index, item in enumerate(events, start=1):
+            if index > 1:
+                reason_lines.append("")
+            reason_lines.append(f"**{index}｜{item['event_name']}**")
             reasons = item["reasons"]
             if reasons["status"] != "available":
-                reason_lines.append(f"`{item['event_name']}` 覆盖率 unavailable（原因维度未注册）")
+                reason_lines.append("> 原因维度未注册，暂不可拆解")
                 continue
             coverage = reasons["coverage"]
-            reason_lines.append(f"`{item['event_name']}` 覆盖率 {coverage['value'] * 100:.1f}%")
+            reason_lines.append(
+                f"> 原因覆盖率：{coverage['value'] * 100:.1f}%"
+                f"（{_fmt(coverage['numerator'])}/{_fmt(coverage['denominator'])}）"
+            )
             for reason in reasons["items"][:3]:
                 share = reason["event_count"] / item["event_count"]["value"] * 100
                 reason_lines.append(
-                    f"• {reason['reason']}：{reason['event_count']}（{share:.1f}%）；"
-                    f"最高上下文 {reason['platform']} / {reason['app_version']}：{reason['context_count']}"
+                    f"> • `{reason['reason']}`：**{_fmt(reason['event_count'])} 次（{share:.1f}%）**；"
+                    f"高发 {reason['platform']} / {reason['app_version']}：{_fmt(reason['context_count'])} 次"
                 )
         if not events:
             reason_lines.append("本期无异常原因需要拆解")
@@ -107,25 +114,33 @@ class FeishuRenderer:
         missing = report["quality"]["missing_dimensions"]
         quality_lines.append("未注册原因维度：" + "、".join(missing) if missing else "自定义原因维度均可查询")
         quality_lines.extend(dict.fromkeys(report["quality"]["warnings"]))
+        web_report_url = _web_report_url(config, period)
+        ga4_report_url = _ga4_report_url(config)
+        actions = []
+        if web_report_url:
+            actions.append({
+                "tag": "button",
+                "text": {"tag": "plain_text", "content": "查看可视化日报"},
+                "type": "primary",
+                "url": web_report_url,
+            })
+        if ga4_report_url:
+            actions.append({
+                "tag": "button",
+                "text": {"tag": "plain_text", "content": "查看 GA4 异常明细表"},
+                "type": "default" if web_report_url else "primary",
+                "url": ga4_report_url,
+            })
         elements: list[dict[str, Any]] = [
             {"tag": "div", "text": {"tag": "lark_md", "content": "\n".join(overall_lines)}},
+        ]
+        if actions:
+            elements.append({"tag": "action", "actions": actions})
+        elements.extend([
             {"tag": "hr"},
             {"tag": "div", "text": {"tag": "lark_md", "content": "\n".join(event_lines)}},
             {"tag": "hr"},
             {"tag": "div", "text": {"tag": "lark_md", "content": "\n".join(reason_lines)}},
-        ]
-        report_url = _ga4_report_url(config)
-        if report_url:
-            elements.append({
-                "tag": "action",
-                "actions": [{
-                    "tag": "button",
-                    "text": {"tag": "plain_text", "content": "查看 GA4 异常明细表"},
-                    "type": "primary",
-                    "url": report_url,
-                }],
-            })
-        elements.extend([
             {"tag": "hr"},
             {"tag": "div", "text": {"tag": "lark_md", "content": "\n".join(quality_lines)}},
         ])
@@ -356,6 +371,34 @@ def _ga4_report_url(config: dict[str, Any] | None) -> str | None:
     if parsed.scheme != "https" or parsed.hostname != "analytics.google.com":
         raise ReportError("GA4 report URL must use https://analytics.google.com")
     return url
+
+
+def _web_report_url(config: dict[str, Any] | None, period: dict[str, str]) -> str | None:
+    if not config or not config.get("web_report_base_url"):
+        return None
+    base_url = str(config["web_report_base_url"])
+    if "{local_ip}" in base_url:
+        try:
+            route = subprocess.run(
+                ["/sbin/route", "-n", "get", "default"],
+                capture_output=True, text=True, check=True, timeout=5,
+            )
+            interface = next(line.split(":", 1)[1].strip() for line in route.stdout.splitlines() if line.strip().startswith("interface:"))
+            local_ip = subprocess.run(
+                ["/usr/sbin/ipconfig", "getifaddr", interface],
+                capture_output=True, text=True, check=True, timeout=5,
+            ).stdout.strip()
+            if not local_ip:
+                raise ValueError
+        except (OSError, StopIteration, ValueError, subprocess.SubprocessError):
+            raise ReportError("Local IPv4 address could not be detected") from None
+        base_url = base_url.replace("{local_ip}", local_ip)
+    base_url = base_url.rstrip("/") + "/"
+    parsed = urllib.parse.urlparse(base_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        raise ReportError("Web report base URL must use HTTP or HTTPS")
+    folder = period["start_date"] if period["start_date"] == period["end_date"] else f"{period['start_date']}_to_{period['end_date']}"
+    return urllib.parse.urljoin(base_url, f"{folder}/daily.html")
 
 
 def feishu_webhook_url(config: dict[str, Any]) -> str:

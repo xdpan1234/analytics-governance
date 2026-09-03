@@ -2,7 +2,7 @@
 
 该工具读取 GA4 Data API 中正式 Schema 批准的业务失败、阻断、降级和失效事件，计算指定区间的异常量、影响用户、结果率、环比和主要原因，并按选择的展示格式输出。默认统计前一完整自然日、与前日比较，并发送飞书卡片；周报和自定义区间仍可手动选择。
 
-程序按四层组织：`Ga4DataSource/FixtureDataSource` 负责取数，`calculate_report` 产出平台无关的规范化报告，`JsonRenderer/FeishuRenderer/HtmlRenderer` 负责展示，`FeishuDelivery` 只负责投递。网页接入时直接消费 JSON 契约即可，不需要改 GA4 查询或统计逻辑。
+程序按四层组织：`Ga4DataSource/FixtureDataSource` 负责取数，`calculate_report` 产出平台无关的规范化报告，`JsonRenderer/FeishuRenderer/DashboardRenderer` 负责展示，`FeishuDelivery` 只负责投递。网页接入时直接消费 JSON 契约即可，不需要改 GA4 查询或统计逻辑。
 
 P0 在本地 Mac 运行，不需要 Analytics Admin API、GA4 Administrator、Cloud Run、Cloud Scheduler 或 BigQuery。
 
@@ -37,24 +37,38 @@ python3 tools/ga4_weekly_error_report.py --fixture examples/ga4_weekly_error_rep
   --compare-start-date 2026-08-17 --compare-end-date 2026-08-23 --output json
 ~~~
 
-`--output json` 输出平台无关报告；`--output html` 输出一个不依赖框架的最小 HTML；省略时输出飞书卡片。`--preview` 只影响飞书投递，JSON/HTML 本身不会发送到飞书。
+`--output json` 输出平台无关报告；`--output html --view daily` 输出决策型日报；`--output html --view investigate` 输出排障工作台。省略 `--view` 时默认输出决策型日报，省略 `--output` 时输出飞书卡片。`--preview` 只影响飞书投递，JSON/HTML 本身不会发送到飞书。
 
-HTML 使用同一份平台无关报告数据，可按异常类型和事件动态筛选。点击事件排行条形会联动刷新当前事件的原因占比、原因覆盖率、周期对比及主要平台/版本上下文；筛选状态保存在 URL 查询参数中。原因占比以当前事件总数为分母，未上报或未批准原因会显示为单独扇区，不会被隐藏后重新归一。
+两个 HTML 页面使用同一份平台无关报告数据。决策型日报回答整体是否恶化，支持业务域、异常类型、平台和版本筛选；排障工作台按事件展示小时热区、原因占比、业务流程分母以及平台 × 版本分布。筛选状态保存在 URL 查询参数中，日报可把当前事件和平台/版本作为深链带入排障页。原因占比以当前筛选下的事件总数为分母，未上报或未批准原因会显示为单独扇区，不会被隐藏后重新归一。
 
 注意：`--output html` 是静态文件渲染，不会启动 HTTP 服务，也不会自动打开浏览器。使用 `--fixture` 时不会发起任何 GA4 网络请求；使用 `>` 重定向后终端也不会显示内容。可以这样打开：
 
 ~~~bash
 python3 tools/ga4_weekly_error_report.py \
   --fixture examples/ga4_weekly_error_report_fixture.json \
-  --output html > /tmp/ga4-report.html
-open -a "Google Chrome" /tmp/ga4-report.html
+  --output html --view daily > /tmp/daily.html
+python3 tools/ga4_weekly_error_report.py \
+  --fixture examples/ga4_weekly_error_report_fixture.json \
+  --output html --view investigate > /tmp/investigate.html
+open -a "Google Chrome" /tmp/daily.html
 ~~~
 
-如果当前环境不能使用 `open`，可在另一个终端启动本地静态服务器后访问 `http://127.0.0.1:8765/ga4-report.html`：
+如果当前环境不能使用 `open`，可在另一个终端启动本地静态服务器后访问对应日期目录中的 `daily.html` 和 `investigate.html`：
 
 ~~~bash
 cd /tmp && python3 -m http.server 8765
 ~~~
+
+本地托管时使用一次取数同时原子更新两个页面和根首页，避免为每个视图重复请求 Data API。`--publish-dir` 不带路径时默认发布到 `/Volumes/SanDisk/ga4-reliability`：
+
+~~~bash
+python3 tools/ga4_weekly_error_report.py \
+  --config /absolute/path/to/ga4-weekly-error-report.json \
+  --preset previous_complete_day \
+  --publish-dir
+~~~
+
+单日会生成 `YYYY-MM-DD/daily.html` 和 `YYYY-MM-DD/investigate.html`；多日范围会生成 `YYYY-MM-DD_to_YYYY-MM-DD/`。根目录 `index.html` 自动跳转到本次生成的决策型日报。若要改到其他位置，在 `--publish-dir` 后传入绝对路径即可。
 
 要验证真实 GA4 请求，请去掉 `--fixture` 并提供 `--config`；该模式会读取 GA4 Data API，但 `--output html` 仍只生成本地 HTML，不会发送飞书。
 
@@ -77,6 +91,7 @@ gcloud auth application-default login --scopes=https://www.googleapis.com/auth/a
   "property_id": "YOUR_GA4_PROPERTY_ID",
   "report_timezone": "Asia/Shanghai",
   "environment": "prod",
+  "web_report_base_url": "http://{local_ip}:8765",
   "ga4_report_url": "https://analytics.google.com/analytics/web/#/analysis/...",
   "data_api_base_url": "YOUR_GA4_DATA_API_BASE_URL",
   "gcloud_bin": "/opt/homebrew/bin/gcloud",
@@ -95,7 +110,7 @@ chmod 600 /absolute/path/to/ga4-weekly-error-report.json
 
 environment 可省略，设置时仅允许 `prod`；省略后报告会明确提示数据未按环境过滤。如果配置了该值但 GA4 未注册事件级自定义维度 environment，报告同样不会假装已过滤，而是在数据质量区提示“未应用 environment 过滤”。
 
-`ga4_report_url` 可省略；填写生产 Property 中保存的 GA4 探索表 URL 后，飞书卡片会显示“查看 GA4 异常明细表”按钮。URL 仅允许 `https://analytics.google.com`，并应继续保存在本地私密配置中。
+`web_report_base_url` 可省略；配置后，飞书卡片会按本次统计周期生成对应日期目录的“查看可视化日报”按钮。使用 `{local_ip}` 时，每次渲染卡片都会读取 macOS 默认物理网络接口的当前 IPv4，避免代理或 VPN 虚拟地址进入链接；也可以直接填写固定 HTTP/HTTPS 地址。`ga4_report_url` 同样可省略；填写生产 Property 中保存的 GA4 探索表 URL 后，卡片会同时显示“查看 GA4 异常明细表”按钮。GA4 URL 仅允许 `https://analytics.google.com`，两项都保存在本地私密配置中。
 
 ## 5. 先手动读取 GA4
 
@@ -148,7 +163,7 @@ launchd 与手动执行使用同一入口、同一配置和同一统计口径。
 
 JSON 报告固定包含 `report_schema_version`、`rules_version`、`period`、`comparison_period`、`summary`、`events` 和 `quality`。所有指标都使用结构化字段：
 
-`events` 保留本期所有非零异常事件及其全部已批准原因；Top 10 和 Top 3 是飞书展示层限制，不会截断 JSON 数据层或 HTML 筛选范围。
+`events` 保留本期所有非零异常事件及其全部已批准原因；Top 10 和 Top 3 是飞书展示层限制，不会截断 JSON 数据层或 HTML 筛选范围。每个事件还包含可选的 `contexts`、`previous_contexts` 和 `timeline`；每个原因包含可选的 `contexts`。这些字段分别承载平台 × 版本分布、筛选后的同期比较、小时趋势和原因上下文，旧消费者可以忽略它们。
 
 ~~~json
 {

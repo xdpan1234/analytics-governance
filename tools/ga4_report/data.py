@@ -8,12 +8,28 @@ import subprocess
 import urllib.error
 import urllib.request
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
 from .contracts import DateRange, ReportError, ReportRequest
 from .rules import OutcomeRule, schema_contract
+
+
+@dataclass(frozen=True)
+class ContextFact:
+    platform: str
+    app_version: str
+    event_count: int
+    affected_users: int = 0
+
+
+@dataclass(frozen=True)
+class TimelineFact:
+    date_hour: str
+    platform: str
+    app_version: str
+    event_count: int
 
 
 @dataclass(frozen=True)
@@ -23,6 +39,7 @@ class ReasonFact:
     app_version: str
     event_count: int
     context_count: int
+    contexts: tuple[ContextFact, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -32,6 +49,8 @@ class PeriodFacts:
     active_users: int
     reasons: dict[str, list[ReasonFact]]
     hidden_unapproved_reason_count: int = 0
+    contexts: dict[str, list[ContextFact]] = field(default_factory=dict)
+    timeline: dict[str, list[TimelineFact]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -156,10 +175,57 @@ def _reason_values(
                     app_version=app_version,
                     context_count=context_count,
                     event_count=sum(contexts.values()),
+                    contexts=tuple(
+                        ContextFact(
+                            platform=context_platform,
+                            app_version=context_version,
+                            event_count=count,
+                        )
+                        for (context_platform, context_version), count in sorted(
+                            contexts.items(), key=lambda item: (-item[1], item[0])
+                        )
+                    ),
                 )
             )
         result[event_name] = sorted(values, key=lambda item: (-item.event_count, item.reason))
     return result, hidden_unapproved
+
+
+def _context_values(response: dict[str, Any]) -> dict[str, list[ContextFact]]:
+    grouped: dict[str, list[ContextFact]] = defaultdict(list)
+    for row in parse_rows(
+        response,
+        {"eventName", "platform", "appVersion", "eventCount", "totalUsers"},
+    ):
+        grouped[row["eventName"]].append(
+            ContextFact(
+                platform=row["platform"] or "unknown",
+                app_version=row["appVersion"] or "unknown",
+                event_count=_int(row["eventCount"], "eventCount"),
+                affected_users=_int(row["totalUsers"], "totalUsers"),
+            )
+        )
+    return {
+        event_name: sorted(values, key=lambda item: (-item.event_count, item.platform, item.app_version))
+        for event_name, values in grouped.items()
+    }
+
+
+def _timeline_values(response: dict[str, Any]) -> dict[str, list[TimelineFact]]:
+    grouped: dict[str, list[TimelineFact]] = defaultdict(list)
+    for row in parse_rows(response, {"dateHour", "eventName", "eventCount"}):
+        grouped[row["eventName"]].append(
+            TimelineFact(
+                date_hour=row["dateHour"],
+                platform=row.get("platform", "unknown") or "unknown",
+                app_version=row.get("appVersion", "unknown") or "unknown",
+                event_count=_int(row["eventCount"], "eventCount"),
+            )
+        )
+    return {
+        event_name: sorted(values, key=lambda item: (item.date_hour, item.platform, item.app_version))
+        for event_name, values in grouped.items()
+    }
 
 
 def access_token(config: dict[str, Any]) -> str:
@@ -256,7 +322,41 @@ def _period_from_api(base_url: str, config: dict[str, Any], token: str, period: 
         dimensions.extend(name for name in ("platform", "appVersion") if name in metadata_dimensions)
         reason_reports[dimension] = _run_report(base_url, property_id, token, period, dimensions, ["eventCount"], _filter(event_names, environment))
     reasons, hidden = _reason_values(reason_reports, rules)
-    return PeriodFacts(_outcome_values(outcomes), _scalar_metric(affected, "totalUsers"), _scalar_metric(active, "activeUsers"), reasons, hidden)
+    contexts: dict[str, list[ContextFact]] = {}
+    timeline_dimensions = ["dateHour", "eventName"]
+    if {"platform", "appVersion"}.issubset(metadata_dimensions):
+        contexts = _context_values(
+            _run_report(
+                base_url,
+                property_id,
+                token,
+                period,
+                ["eventName", "platform", "appVersion"],
+                ["eventCount", "totalUsers"],
+                _filter(abnormal_names, environment),
+            )
+        )
+        timeline_dimensions.extend(["platform", "appVersion"])
+    timeline = _timeline_values(
+        _run_report(
+            base_url,
+            property_id,
+            token,
+            period,
+            timeline_dimensions,
+            ["eventCount"],
+            _filter(abnormal_names, environment),
+        )
+    )
+    return PeriodFacts(
+        _outcome_values(outcomes),
+        _scalar_metric(affected, "totalUsers"),
+        _scalar_metric(active, "activeUsers"),
+        reasons,
+        hidden,
+        contexts,
+        timeline,
+    )
 
 
 class Ga4DataSource:
@@ -326,7 +426,17 @@ class FixtureDataSource:
             if not isinstance(outcomes, dict) or not isinstance(affected, dict) or not isinstance(active, dict):
                 raise ReportError("fixture report period is invalid")
             reasons, hidden = _reason_values(raw.get("reasons", {}), self.rules)
-            return PeriodFacts(_outcome_values(outcomes), _scalar_metric(affected, "totalUsers"), _scalar_metric(active, "activeUsers"), reasons, hidden)
+            contexts = _context_values(raw["contexts"]) if "contexts" in raw else {}
+            timeline = _timeline_values(raw["timeline"]) if "timeline" in raw else {}
+            return PeriodFacts(
+                _outcome_values(outcomes),
+                _scalar_metric(affected, "totalUsers"),
+                _scalar_metric(active, "activeUsers"),
+                reasons,
+                hidden,
+                contexts,
+                timeline,
+            )
         warnings: tuple[str, ...] = ()
         current = period("current")
         previous = period("previous") if request.comparison_range else None

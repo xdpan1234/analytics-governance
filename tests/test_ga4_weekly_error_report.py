@@ -229,11 +229,12 @@ class Ga4WeeklyErrorReportTest(unittest.TestCase):
                                 "tag": "lark_md",
                                 "content": (
                                     "**主要原因**\n"
-                                    "`account_login_failed` 覆盖率 90.0%\n"
-                                    "• network_error：6（60.0%）；"
-                                    "最高上下文 android / 1.2.0：4\n"
-                                    "• timeout：3（30.0%）；"
-                                    "最高上下文 ios / 1.3.0：3"
+                                    "**1｜account_login_failed**\n"
+                                    "> 原因覆盖率：90.0%（9/10）\n"
+                                    "> • `network_error`：**6 次（60.0%）**；"
+                                    "高发 android / 1.2.0：4 次\n"
+                                    "> • `timeout`：**3 次（30.0%）**；"
+                                    "高发 ios / 1.3.0：3 次"
                                 ),
                             },
                         },
@@ -425,8 +426,9 @@ class Ga4WeeklyErrorReportTest(unittest.TestCase):
         )
         self.assertNotIn("tutorial_help_link_open_failed", event_content)
         self.assertIn(
-            "`device_usage_media_sync_failed` 覆盖率 100.0%\n"
-            "• network：2（100.0%）；最高上下文 ios / 2.0.0：2",
+            "device_usage_media_sync_failed**\n"
+            "> 原因覆盖率：100.0%（2/2）\n"
+            "> • `network`：**2 次（100.0%）**；高发 ios / 2.0.0：2 次",
             content,
         )
         self.assertIn(
@@ -512,7 +514,7 @@ class Ga4WeeklyErrorReportTest(unittest.TestCase):
             content,
         )
         self.assertIn(
-            "`translation_blocked` 覆盖率 unavailable（原因维度未注册）",
+            "translation_blocked**\\n> 原因维度未注册，暂不可拆解",
             content,
         )
 
@@ -559,6 +561,19 @@ class Ga4WeeklyErrorReportTest(unittest.TestCase):
                 elif metrics == ["activeUsers"]:
                     self.send_json(
                         report_response([], metrics, [([], [1000 if current else 800])])
+                    )
+                elif dimensions == ["eventName", "platform", "appVersion"]:
+                    self.send_json(
+                        report_response(
+                            dimensions,
+                            metrics,
+                            [
+                                (
+                                    ["account_login_failed", "android", "1.2.0"],
+                                    [10 if current else 5, 8 if current else 4],
+                                )
+                            ],
+                        )
                     )
                 elif "customEvent:failure_reason" in dimensions and current:
                     self.send_json(

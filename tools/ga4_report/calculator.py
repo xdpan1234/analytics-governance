@@ -86,10 +86,45 @@ def calculate_report(request: ReportRequest, facts: NormalizedFacts, rules: tupl
                             "app_version": item.app_version,
                             "event_count": item.event_count,
                             "context_count": item.context_count,
+                            "contexts": [
+                                {
+                                    "platform": context.platform,
+                                    "app_version": context.app_version,
+                                    "event_count": context.event_count,
+                                }
+                                for context in item.contexts
+                            ],
                         }
                         for item in reasons
                     ],
                 },
+                "contexts": [
+                    {
+                        "platform": item.platform,
+                        "app_version": item.app_version,
+                        "event_count": item.event_count,
+                        "affected_users": item.affected_users,
+                    }
+                    for item in current.contexts.get(rule.event_name, [])
+                ],
+                "previous_contexts": [
+                    {
+                        "platform": item.platform,
+                        "app_version": item.app_version,
+                        "event_count": item.event_count,
+                        "affected_users": item.affected_users,
+                    }
+                    for item in previous.contexts.get(rule.event_name, [])
+                ] if previous else [],
+                "timeline": [
+                    {
+                        "date_hour": item.date_hour,
+                        "platform": item.platform,
+                        "app_version": item.app_version,
+                        "event_count": item.event_count,
+                    }
+                    for item in current.timeline.get(rule.event_name, [])
+                ],
             }
         )
     events.sort(key=lambda item: (-item["event_count"]["value"], item["event_name"]))
