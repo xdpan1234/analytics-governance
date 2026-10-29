@@ -36,7 +36,37 @@ python3 tools/ga4_log_collection.py --input fixture.json --day 2026-10-27 --as-o
 
 `candidate_pool` 保留所有可解释候选；`candidate_proposals` 是跨本次补算日期合并的限额预览：最多二十账号，同优先级先每组一个再补至每组三个，账号只选一次。最近异常超过 168 小时仅进日报。可用 JSON `--policy` 覆盖初始参数；变更产品额度仍需业务确认。
 
-后端应从候选池校验账号与诊断授权，关联已有任务，并在持久事务内完成任务创建 UTC 日二十账号、每组最多三、账号滚动二十四小时冷却和幂等。平台保留为诊断上下文，不新增手机安装 ID。不能直接把预览名单当可派单结果，不能把重跑预览当额度已扣减；任务先登记，再按账号在线状态选择 WebSocket／FCM。分析入口不实现这些后端行为，也不接 Kestra。
+后端应从候选池校验账号与诊断授权，关联已有任务，并在持久事务内完成任务创建 UTC 日二十账号、每组最多三、账号滚动二十四小时冷却和幂等。平台保留为诊断上下文，不新增手机安装 ID。不能直接把预览名单当可派单结果，不能把重跑预览当额度已扣减；任务先登记，再按账号在线状态选择 WebSocket／FCM。分析入口不实现这些后端行为；Kestra 包装流程仅编排独立命令，见下节。
+
+## Kestra 编排与诊断上下文（2026-10-29）
+
+`flows/bigquery-daily-analysis.yaml` 已在本地 `local.analytics` 注册。使用已有 Kestra 2.0.6 Process runner 和 Python 3.12；无新依赖、不挂载服务号凭据、无定时／Webhook 触发器。计算模块和既有阈值不变。
+
+执行顺序：校验冻结快照 → 调用 `ga4_log_collection.py --input` → 调用 `ga4_diagnostic_context.py` 归档。输入为冻结 `source.private.json`、对应 `manifest.json`、目标 UTC 日和评估时刻；FILE 输入可复用既有执行的 Kestra URI，无需重复上传，更不重复查询生产 BigQuery。流程默认日期和时刻固定于本次快照，不能当作生产每日调度。
+
+| 输出文件 | 内容与用途 |
+| --- | --- |
+| `analysis.private.json` | 完整日报、候选、排除与限额预览；含业务账号，仅私有访问 |
+| `diagnostic-contexts.private.json` | 20 个预览入选账号各自的埋点事实、全部命中线索、规则依据、总体环比／基线和待验证排查方向；包含账号到上下文 ID 的私有索引 |
+| `run-summary.json` | 不含账号的摘要、数据状态、计数和源摘要；作为流程 summary 输出 |
+
+文件由 WorkingDirectory 的 `outputFiles` 写入 Kestra 内部存储，Execution 的 Input/Output 可下载。主执行的 SUCCESS 只证明流程运行成功；例如目标日缺表时，摘要仍明确 `WAITING_EXPORT`，并展示最近可用统计日。
+
+上下文 ID 是完整上下文内容的 SHA-256；规则或事实变化生成新 ID。每条事实保留源聚合行 SHA-256、首次／末次 UTC 时间、平台／版本、合法原因、次数和质量状态；候选通过 fact ID 引用事实并核对次数。`population_comparison` 明确是全过滤人群、跨平台总体指标，不能误当单账号或单平台基线。当前仅按日聚合、没有逐条时间线；未知原因原文不被重新带入上下文。
+
+`investigation` 是程序生成的规则排查提示，固定 `HYPOTHESIS / UNVERIFIED`，保留语义搜索词、检查点与需支持／反对证据的要求，不是模型已确认的根因，也不声称搜索词是精确 Logger tag。账号可跨手机与版本；后续实际日志必须核对覆盖、版本、平台与时钟。
+
+后续关联按以下内部约定设计，尚未实现业务 API：后端在采集任务准入成功时保存 `collection_task_id ↔ context_id / context_uri / context_sha256`；同一任务追加新线索保留多个上下文引用，不覆盖旧版本。日志就绪后，以可信任务／上传记录查回上下文，重新验证账号归属、授权、实际覆盖和摘要，交给日志分析。独立上传缺少任务关联时，再按可信账号＋统计窗＋平台／版本查找，返回多项或不匹配，不能只取该账号最新一次推断。
+
+Kestra 保存步骤状态、摘要和文件 URI；业务后端负责账号／任务／日志包的可信关联和权限。KV 可以存游标或最新引用，不作为配额锁、24 小时冷却账本或唯一业务主档。当前本地内部存储使用持久 Docker volume；生产应沿用私有对象存储和既定访问／到期策略，执行清理不得删除仍被业务任务引用的唯一上下文。不能将普通 outputs 当作加密保险箱，不在 labels／运行日志里放原始账号或完整埋点。
+
+当前总包含多个账号，只供可信操作者／诊断服务读取；生产单任务访问前应按账号拆对象或通过受限读取接口筛选，不能将总包交给 AI。`context_id` 是单份上下文的规范化内容摘要，不等于整个文件的字节摘要；后端应同时保存 artifact URI／SHA-256 与 context ID，并分别核验。
+
+本地运行时放在既有只读挂载 `/demo/runtime/analytics-governance`：将当前仓库的 `tools/ga4_log_collection.py`、`tools/ga4_diagnostic_context.py`、`tools/ga4_report/` 与 `analytics_schema/` 复制到宿主 `/Volumes/SanDisk-CaseSensitive/code/log/backend-local/runtime/analytics-governance/`。代码更新应在无活动执行时同步；每份上下文记录实际实现与 Schema 摘要。生产部署应固化镜像或只读版本目录，不依赖个人电脑此路径。
+
+2026-10-29 真实验证：revision 2、execution `65vaHa6WJc5D1zehJXWqQO` 成功，20 个上下文／52 条线索；逐账号回查、事实归属及命中次数均通过，源快照未改变。未创建日志采集任务、未推送、未进行生产定时查询。前轮审查的原生崩溃分类、iOS Schema 漂移和历史补算选样偏重仍是待解决项，本次接线没有改变相关规则。
+
+依据：Kestra 官方 [文件存储](https://kestra.io/docs/concepts/storage)、[WorkingDirectory](https://kestra.io/plugins/core/flow/io.kestra.plugin.core.flow.workingdirectory)、[KV Store](https://kestra.io/docs/concepts/kv-store)、[JSON 解析](https://kestra.io/docs/expressions/functions/parsing)。
 
 ## 数据质量与指标状态
 

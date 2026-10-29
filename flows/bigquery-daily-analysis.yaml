@@ -1,0 +1,67 @@
+id: bigquery-daily-analysis
+namespace: local.analytics
+description: |
+  冻结生产快照回放：校验数据 → UTC 日报与候选 → 按账号归档诊断上下文。
+  使用已缓存事实，不查询 BigQuery、不创建日志任务、不发送通知。未配置自动触发器。
+labels:
+  component: ga4-diagnostics
+  mode: frozen-preview
+inputs:
+  - id: facts
+    type: FILE
+    description: 已冻结的 source.private.json，可复用原执行的输入 URI
+  - id: manifest
+    type: FILE
+    description: 与事实文件对应的 manifest.json，必须通过摘要和范围校验
+  - id: statistical_day
+    type: DATE
+    defaults: "2026-10-28"
+  - id: evaluation_as_of
+    type: STRING
+    defaults: "2026-10-29T08:09:11.963974+00:00"
+concurrency:
+  limit: 1
+  behavior: QUEUE
+tasks:
+  - id: analysis
+    type: io.kestra.plugin.core.flow.WorkingDirectory
+    inputFiles:
+      source.private.json: "{{ inputs.facts }}"
+      manifest.json: "{{ inputs.manifest }}"
+    outputFiles:
+      - analysis.private.json
+      - diagnostic-contexts.private.json
+      - run-summary.json
+    tasks:
+      - id: verify_snapshot
+        type: io.kestra.plugin.scripts.shell.Commands
+        taskRunner:
+          type: io.kestra.plugin.core.runner.Process
+        commands:
+          - python3 /demo/runtime/analytics-governance/tools/ga4_diagnostic_context.py --input source.private.json --manifest manifest.json
+      - id: daily_report_and_candidates
+        type: io.kestra.plugin.scripts.shell.Commands
+        taskRunner:
+          type: io.kestra.plugin.core.runner.Process
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+          STATISTICAL_DAY: "{{ inputs.statistical_day }}"
+          EVALUATION_AS_OF: "{{ inputs.evaluation_as_of }}"
+        commands:
+          - python3 /demo/runtime/analytics-governance/tools/ga4_log_collection.py --input source.private.json --day "$STATISTICAL_DAY" --as-of "$EVALUATION_AS_OF" --output analysis.private.json
+      - id: archive_diagnostic_context
+        type: io.kestra.plugin.scripts.shell.Commands
+        taskRunner:
+          type: io.kestra.plugin.core.runner.Process
+        commands:
+          - python3 /demo/runtime/analytics-governance/tools/ga4_diagnostic_context.py --input source.private.json --manifest manifest.json --analysis analysis.private.json --output diagnostic-contexts.private.json --summary run-summary.json
+outputs:
+  - id: summary
+    type: JSON
+    value: "{{ fromJson(read(outputs.analysis.outputFiles['run-summary.json'])) }}"
+  - id: diagnostic_contexts
+    type: URI
+    value: "{{ outputs.analysis.outputFiles['diagnostic-contexts.private.json'] }}"
+  - id: private_analysis
+    type: URI
+    value: "{{ outputs.analysis.outputFiles['analysis.private.json'] }}"
