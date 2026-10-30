@@ -15,7 +15,7 @@ from db import SCOPE, connect
 app = FastAPI(title="埋点分析管理只读 API", version="1.0.0", docs_url=None, redoc_url=None,
               openapi_url="/api/openapi.json")
 router = APIRouter(prefix="/api/v1", responses={400:{"model":ErrorReply},403:{"model":ErrorReply},
-                    404:{"model":ErrorReply},503:{"model":ErrorReply}})
+                    404:{"model":ErrorReply},500:{"model":ErrorReply},503:{"model":ErrorReply}})
 QueryPage = Annotated[PageQuery, Query()]
 EmptyQuery = Annotated[NoQuery, Query()]
 
@@ -35,7 +35,10 @@ async def local_read_only_boundary(request: Request, call_next):
     elif len(str(request.url)) > 2048 or len(request.query_params) != len(request.query_params.multi_items()):
         response = error(400,"INVALID_QUERY","查询参数重复或过长。")
     else:
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception:
+            response = error(500,"INTERNAL_ERROR","查询暂时无法完成，请稍后重试。")
     response.headers.update({"Cache-Control":"no-store","X-Content-Type-Options":"nosniff", "Referrer-Policy":"no-referrer"})
     return response
 
@@ -54,11 +57,6 @@ async def http_error(_request, exception):
 @app.exception_handler(psycopg.Error)
 async def database_unavailable(_request, _exception):
     return error(503,"DATABASE_UNAVAILABLE","数据库暂时不可用，请稍后重试。")
-
-
-@app.exception_handler(Exception)
-async def internal_error(_request, _exception):
-    return error(500,"INTERNAL_ERROR","查询暂时无法完成，请稍后重试。")
 
 
 def require_run(conn, run_id):
@@ -188,3 +186,8 @@ def exclusions(run_id: RunId, query: QueryPage):
 
 
 app.include_router(router)
+# Validation is deliberately 400, so the generated contract must match the handler.
+for path in app.openapi()["paths"].values():
+    for operation in path.values():
+        if isinstance(operation, dict):
+            operation.get("responses", {}).pop("422", None)

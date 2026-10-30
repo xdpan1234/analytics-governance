@@ -1,0 +1,22 @@
+{
+  "name": "analytics-management-ui",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "typecheck": "vue-tsc --noEmit",
+    "build": "npm run typecheck && vite build"
+  },
+  "dependencies": {
+    "element-plus": "2.14.7",
+    "vue": "3.5.44",
+    "vue-router": "4.6.4"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "6.0.10",
+    "typescript": "5.9.3",
+    "vite": "8.3.5",
+    "vue-tsc": "3.3.14"
+  }
+}
