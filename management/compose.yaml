@@ -1,0 +1,46 @@
+name: analytics-management
+services:
+  web:
+    build: .
+    image: analytics-management:phase1
+    restart: unless-stopped
+    ports:
+      - '127.0.0.1:8090:8090'
+    environment:
+      PGHOST: postgres
+      PGDATABASE: analytics_management
+      PGUSER: analytics_reader
+      PGPASSWORD: ${ANALYTICS_READER_PASSWORD:?Run setup_local.py first}
+      ANALYTICS_SCOPE: ai.looktech.glasses.memo/prod/us/release
+    networks: [backend]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    mem_limit: 256m
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/healthz', timeout=5)"]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+  import:
+    image: analytics-management:phase1
+    profiles: [tools]
+    user: '${ANALYTICS_LOCAL_UID:?}:${ANALYTICS_LOCAL_GID:?}'
+    command: [python, import_cached.py, --archive, /archive, --snapshot, /snapshot]
+    environment:
+      PGHOST: postgres
+      PGDATABASE: analytics_management
+      PGUSER: analytics_importer
+      PGPASSWORD: ${ANALYTICS_IMPORTER_PASSWORD:?Run setup_local.py first}
+      ANALYTICS_SCOPE: ai.looktech.glasses.memo/prod/us/release
+    volumes:
+      - ${ANALYTICS_ARCHIVE_DIR:?Set cached archive directory}:/archive:ro
+      - ${ANALYTICS_SNAPSHOT_DIR:?Set frozen snapshot directory}:/snapshot:ro
+    networks: [backend]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+networks:
+  backend:
+    external: true
+    name: log-backend-local_default
