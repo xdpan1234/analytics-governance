@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 import re
 
+import psycopg
 from psycopg.types.json import Jsonb
 from db import SCOPE, connect
 
@@ -57,7 +58,7 @@ def validate(archive, snapshot):
     source_rows = {digest(row): row for row in source["rows"]}
     pool = {row["candidate_key"]: row for row in analysis["candidate_pool"]}
     for account, context_id in bundle["account_index"].items():
-        require(re.fullmatch(r"[1-9][0-9]*", account), "Invalid selected account")
+        require(re.fullmatch(r"[1-9][0-9]{0,63}", account), "Invalid selected account")
         context = bundle["contexts"][context_id]
         require(digest(context) == context_id and context["account_id"] == account and
                 context["run_id"] == bundle["run_id"] and context["provenance"] == provenance, "Context ownership or checksum mismatch")
@@ -148,4 +149,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    try:
+        main()
+    except (ValueError,KeyError,OSError,psycopg.Error) as error:
+        raise SystemExit(f"Archive import failed: {type(error).__name__}") from None

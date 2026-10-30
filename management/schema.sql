@@ -68,7 +68,6 @@ CREATE TABLE IF NOT EXISTS analytics.telemetry_findings (
     UNIQUE (run_id, finding_key)
 );
 CREATE INDEX IF NOT EXISTS findings_account_run ON analytics.telemetry_findings(account_id, run_id);
-ALTER TABLE analytics.telemetry_findings ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAULT now();
 CREATE TABLE IF NOT EXISTS analytics.run_executions (
     run_id text NOT NULL REFERENCES analytics.telemetry_runs(run_id),
     execution_id text NOT NULL,

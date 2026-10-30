@@ -37,6 +37,8 @@ tests/
 
 ## How To Use
 
+- 本机 PostgreSQL 埋点分析管理台：见 [management/README.md](management/README.md)，查看冻结批次的 Top10、候选用户与诊断上下文。
+
 - Use `skills/ga4-analytics-instrumentation` when adding, changing, reviewing, or validating production GA4/Firebase Analytics instrumentation.
 - Treat `analytics_schema/*.yaml` as the cross-platform machine-readable event contract.
 - Treat `docs/tracking-plan.md` as the human-readable source for event ownership, goals, privacy, and verification.
